@@ -1,30 +1,35 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kairo/core/router/router.dart';
+import 'package:kairo/core/services/supabase_service.dart';
 
-import 'package:kairo/main.dart';
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseService.initialize();
+  runApp(const ProviderScope(child: KairoApp()));
+}
 
-void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+class KairoApp extends ConsumerWidget {
+  const KairoApp({super.key});
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
-  });
+    return MaterialApp.router(
+      title: 'Kairo',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFA0C9FF),
+          secondary: Color(0xFF7AD5D7),
+          surface: Color(0xFF0C141B),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0C141B),
+        fontFamily: 'Inter',
+        useMaterial3: true,
+      ),
+      routerConfig: router,
+    );
+  }
 }

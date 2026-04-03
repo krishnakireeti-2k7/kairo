@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:app_links/app_links.dart';
+
+import 'core/router/router.dart';
 import 'core/services/supabase_service.dart';
 
 Future<void> main() async {
@@ -6,16 +11,41 @@ Future<void> main() async {
 
   await SupabaseService.initialize();
 
-  runApp(const MyApp());
+  // ✅ Deep link listener (CRITICAL for OAuth)
+  final appLinks = AppLinks();
+
+  appLinks.uriLinkStream.listen((uri) async {
+    try {
+      await Supabase.instance.client.auth.getSessionFromUrl(uri);
+    } catch (e) {
+      debugPrint('OAuth redirect error: $e');
+    }
+  });
+
+  runApp(const ProviderScope(child: KairoApp()));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class KairoApp extends ConsumerWidget {
+  const KairoApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(body: Center(child: Text("Kairo App Running"))),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
+      title: 'Kairo',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFA0C9FF),
+          secondary: Color(0xFF7AD5D7),
+          surface: Color(0xFF0C141B),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0C141B),
+        fontFamily: 'Inter',
+        useMaterial3: true,
+      ),
+      routerConfig: router,
     );
   }
 }
