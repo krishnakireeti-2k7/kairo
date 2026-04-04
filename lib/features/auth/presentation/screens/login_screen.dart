@@ -268,7 +268,7 @@ class _FooterNote extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Google sign-in is the only login method for now, keeping access simple and aligned with your secure auth flow.',
+              'New users can also use Google sign-in to create their account',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 13,

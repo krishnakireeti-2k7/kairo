@@ -30,7 +30,22 @@ class AuthNotifier extends AsyncNotifier<void> {
 
   Future<void> signInWithGoogle() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() => SupabaseService.signInWithGoogle());
+
+    state = await AsyncValue.guard(() async {
+      await SupabaseService.signInWithGoogle();
+
+      final user = SupabaseService.currentUser;
+
+      if (user == null) {
+        throw Exception("User is null after login");
+      }
+
+      // ✅ THIS IS THE MISSING PIECE
+      await SupabaseService.client.from('users').upsert({
+        'id': user.id,
+        'email': user.email,
+      });
+    });
   }
 
   Future<void> signOut() async {

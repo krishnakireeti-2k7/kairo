@@ -354,10 +354,10 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 148,
       padding: const EdgeInsets.all(18),
       decoration: _panelDecoration(),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
@@ -369,7 +369,7 @@ class _InfoCard extends StatelessWidget {
             ),
             child: Icon(icon, size: 16, color: accent),
           ),
-          const Spacer(),
+          const SizedBox(height: 16),
           Text(
             title,
             style: const TextStyle(
@@ -390,6 +390,8 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             subLine,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 14, color: Color(0xFFC4CBD6)),
           ),
         ],
