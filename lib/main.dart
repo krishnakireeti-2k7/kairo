@@ -11,7 +11,6 @@ Future<void> main() async {
 
   await SupabaseService.initialize();
 
-  // ✅ Deep link listener (CRITICAL for OAuth)
   final appLinks = AppLinks();
 
   appLinks.uriLinkStream.listen((uri) async {

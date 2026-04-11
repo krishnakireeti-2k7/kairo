@@ -11,8 +11,8 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final logsState = ref.watch(logProvider);
-    final logs = logsState.asData?.value ?? const <LogModel>[];
+    final logsAsync = ref.watch(logsProvider);
+    final logs = logsAsync.asData?.value ?? const <LogModel>[];
     final authNotifier = ref.read(authNotifierProvider.notifier);
 
     return Scaffold(
@@ -39,7 +39,10 @@ class HomeScreen extends ConsumerWidget {
             RefreshIndicator(
               color: const Color(0xFF79D9E2),
               backgroundColor: const Color(0xFF162129),
-              onRefresh: () => ref.read(logProvider.notifier).loadLogs(),
+              onRefresh: () async {
+                ref.invalidate(logsProvider);
+                await ref.read(logsProvider.future);
+              },
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -162,7 +165,7 @@ class HomeScreen extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _LogsSection(logsState: logsState),
+                        _LogsSection(logsAsync: logsAsync),
                       ]),
                     ),
                   ),
@@ -192,13 +195,13 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _LogsSection extends StatelessWidget {
-  final AsyncValue<List<LogModel>> logsState;
+  final AsyncValue<List<LogModel>> logsAsync;
 
-  const _LogsSection({required this.logsState});
+  const _LogsSection({required this.logsAsync});
 
   @override
   Widget build(BuildContext context) {
-    return logsState.when(
+    return logsAsync.when(
       loading: () => Container(
         padding: const EdgeInsets.symmetric(vertical: 40),
         decoration: _panelDecoration(),
@@ -213,7 +216,7 @@ class _LogsSection extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: _panelDecoration(),
         child: Text(
-          error.toString(),
+          'Error: $error',
           style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 15),
         ),
       ),
@@ -236,18 +239,19 @@ class _LogsSection extends StatelessWidget {
 
         return Container(
           decoration: _panelDecoration(),
-          child: ListView.separated(
+          child: ListView.builder(
             itemCount: logs.length,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            separatorBuilder: (_, _) => Divider(
-              color: const Color(0xFFDBE3ED).withValues(alpha: 0.06),
-              height: 24,
-            ),
             itemBuilder: (context, index) {
               final log = logs[index];
-              return _LogListItem(log: log);
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: index == logs.length - 1 ? 0 : 16,
+                ),
+                child: _LogListItem(log: log),
+              );
             },
           ),
         );
@@ -290,16 +294,47 @@ class _LogListItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _severityLabel(log.severity),
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFF5F7FA),
-                    ),
+                  Expanded(
+                    child: log.symptoms.isEmpty
+                        ? const Text(
+                            'No symptoms',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFF5F7FA),
+                            ),
+                          )
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: log.symptoms.map((s) {
+                              String display(String str) {
+                                if (str.isEmpty) return str;
+                                return str[0].toUpperCase() + str.substring(1);
+                              }
+                              return Chip(
+                                label: Text(
+                                  display(s),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFAED0FF),
+                                  ),
+                                ),
+                                backgroundColor: const Color(0xFF134D87),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: const BorderSide(color: Color(0xFF2E78C6)),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              );
+                            }).toList(),
+                          ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text(
                     _formatDateTime(log.timestamp),
                     style: const TextStyle(
@@ -311,44 +346,19 @@ class _LogListItem extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                '${log.duration} mins',
+                'Severity: ${log.severity}',
                 style: const TextStyle(
                   fontSize: 13,
                   color: Color(0xFF87E6EF),
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (log.symptomNames.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: log.symptomNames
-                      .map(
-                        (symptomName) => Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF79D9E2,
-                            ).withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            symptomName,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFBEECEF),
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
+              const SizedBox(height: 4),
+              Text(
+                _formatDateTime(log.timestamp),
+                style: const TextStyle(fontSize: 12, color: Color(0xFFA7B0BD)),
+              ),
+
               if (log.notes.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(

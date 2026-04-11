@@ -13,7 +13,7 @@ final isSignedInProvider = Provider<bool>((ref) {
   return authState.when(
     data: (state) => state.session != null,
     loading: () => SupabaseService.isSignedIn,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });
 

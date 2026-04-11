@@ -1,58 +1,34 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kairo/features/logs/data/repositories/log_repository.dart';
 import 'package:kairo/features/logs/domain/models/log_model.dart';
+import 'package:kairo/features/logs/data/repositories/log_repository.dart';
 
 final logRepositoryProvider = Provider<LogRepository>((ref) {
   return LogRepository();
 });
 
-final logProvider = AsyncNotifierProvider<LogNotifier, List<LogModel>>(
-  LogNotifier.new,
+final logsProvider = FutureProvider<List<LogModel>>((ref) async {
+  final repo = ref.read(logRepositoryProvider);
+  return await repo.fetchLogs().timeout(const Duration(seconds: 10));
+});
+
+final logSubmissionProvider = NotifierProvider<LogSubmissionNotifier, bool>(
+  LogSubmissionNotifier.new,
 );
-
-class LogNotifier extends AsyncNotifier<List<LogModel>> {
-  @override
-  FutureOr<List<LogModel>> build() async {
-    return ref.read(logRepositoryProvider).fetchLogs();
-  }
-
-  Future<void> loadLogs() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref.read(logRepositoryProvider).fetchLogs(),
-    );
-  }
-
-  Future<void> createLog({
-    required int severity,
-    required int duration,
-    required String notes,
-    required DateTime timestamp,
-    List<String> symptomIds = const [],
-    List<String> contextIds = const [],
-  }) async {
-    final repository = ref.read(logRepositoryProvider);
-
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
-      await repository.createLog(
-        severity: severity,
-        duration: duration,
-        notes: notes,
-        timestamp: timestamp,
-        symptomIds: symptomIds,
-        contextIds: contextIds,
-      );
-      return repository.fetchLogs();
-    });
-  }
-}
 
 final logFormProvider = NotifierProvider<LogFormNotifier, LogFormState>(
   LogFormNotifier.new,
 );
+
+class LogSubmissionNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    return false;
+  }
+
+  void setSubmitting(bool value) {
+    state = value;
+  }
+}
 
 class LogFormNotifier extends Notifier<LogFormState> {
   @override
@@ -80,24 +56,30 @@ class LogFormNotifier extends Notifier<LogFormState> {
     state = state.copyWith(symptomSearch: value);
   }
 
-  void toggleSymptom(String value) {
-    final updated = <String>{...state.selectedSymptoms};
-    if (updated.contains(value)) {
-      updated.remove(value);
-    } else {
-      updated.add(value);
+  void addSymptom(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return;
     }
-    state = state.copyWith(selectedSymptoms: updated);
+
+    final exists = state.symptoms.any(
+      (symptom) => symptom.toLowerCase() == normalized.toLowerCase(),
+    );
+    if (exists) {
+      state = state.copyWith(symptomSearch: '');
+      return;
+    }
+
+    state = state.copyWith(
+      symptoms: [...state.symptoms, normalized],
+      symptomSearch: '',
+    );
   }
 
-  void toggleContext(String value) {
-    final updated = <String>{...state.selectedContexts};
-    if (updated.contains(value)) {
-      updated.remove(value);
-    } else {
-      updated.add(value);
-    }
-    state = state.copyWith(selectedContexts: updated);
+  void removeSymptom(String value) {
+    state = state.copyWith(
+      symptoms: state.symptoms.where((symptom) => symptom != value).toList(),
+    );
   }
 
   void reset() {
@@ -111,8 +93,7 @@ class LogFormState {
   final String notes;
   final DateTime timestamp;
   final String symptomSearch;
-  final Set<String> selectedSymptoms;
-  final Set<String> selectedContexts;
+  final List<String> symptoms;
 
   const LogFormState({
     required this.severity,
@@ -120,8 +101,7 @@ class LogFormState {
     required this.notes,
     required this.timestamp,
     required this.symptomSearch,
-    required this.selectedSymptoms,
-    required this.selectedContexts,
+    required this.symptoms,
   });
 
   factory LogFormState.initial() {
@@ -131,8 +111,7 @@ class LogFormState {
       notes: '',
       timestamp: DateTime.now(),
       symptomSearch: '',
-      selectedSymptoms: const <String>{},
-      selectedContexts: const <String>{},
+      symptoms: const <String>[],
     );
   }
 
@@ -142,8 +121,7 @@ class LogFormState {
     String? notes,
     DateTime? timestamp,
     String? symptomSearch,
-    Set<String>? selectedSymptoms,
-    Set<String>? selectedContexts,
+    List<String>? symptoms,
   }) {
     return LogFormState(
       severity: severity ?? this.severity,
@@ -151,8 +129,7 @@ class LogFormState {
       notes: notes ?? this.notes,
       timestamp: timestamp ?? this.timestamp,
       symptomSearch: symptomSearch ?? this.symptomSearch,
-      selectedSymptoms: selectedSymptoms ?? this.selectedSymptoms,
-      selectedContexts: selectedContexts ?? this.selectedContexts,
+      symptoms: symptoms ?? this.symptoms,
     );
   }
 }

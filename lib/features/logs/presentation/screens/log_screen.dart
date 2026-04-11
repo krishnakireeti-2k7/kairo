@@ -10,18 +10,8 @@ class LogScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final form = ref.watch(logFormProvider);
-    final logsState = ref.watch(logProvider);
-    final isSubmitting = logsState.isLoading;
-
-    final filteredSymptoms = _symptomOptions
-        .where(
-          (option) =>
-              form.symptomSearch.trim().isEmpty ||
-              option.label.toLowerCase().contains(
-                form.symptomSearch.toLowerCase(),
-              ),
-        )
-        .toList();
+    final isSubmitting = ref.watch(logSubmissionProvider);
+    final formNotifier = ref.read(logFormProvider.notifier);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B141B),
@@ -97,75 +87,53 @@ class LogScreen extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 18),
-                        _SearchField(
+                        _SymptomInputField(
                           value: form.symptomSearch,
-                          onChanged: ref
-                              .read(logFormProvider.notifier)
-                              .setSymptomSearch,
+                          onChanged: formNotifier.setSymptomSearch,
+                          onSubmitted: formNotifier.addSymptom,
                         ),
                         const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: filteredSymptoms
-                              .map(
-                                (option) => _SelectionChip(
-                                  label: option.label,
-                                  selected: form.selectedSymptoms.contains(
-                                    option.key,
+                        if (form.symptoms.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF182129),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFFDBE3ED,
+                                ).withValues(alpha: 0.05),
+                              ),
+                            ),
+                            child: const Text(
+                              'Type a symptom and press enter to add it.',
+                              style: TextStyle(
+                                color: Color(0xFF8E99A7),
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        else
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: form.symptoms
+                                .map(
+                                  (symptom) => _SymptomChip(
+                                    label: symptom,
+                                    onRemove: () =>
+                                        formNotifier.removeSymptom(symptom),
                                   ),
-                                  selectedTextColor: const Color(0xFFAED0FF),
-                                  onTap: () => ref
-                                      .read(logFormProvider.notifier)
-                                      .toggleSymptom(option.key),
-                                ),
-                              )
-                              .toList(),
-                        ),
+                                )
+                                .toList(),
+                          ),
                         const SizedBox(height: 28),
                         SeveritySlider(
                           value: form.severity,
                           onChanged: (value) => ref
                               .read(logFormProvider.notifier)
                               .setSeverity(value.round()),
-                        ),
-                        const SizedBox(height: 28),
-                        const Text(
-                          'Contextual Triggers',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFF1F5F9),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _contextOptions.length,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                mainAxisSpacing: 14,
-                                crossAxisSpacing: 14,
-                                childAspectRatio: 1.9,
-                              ),
-                          itemBuilder: (context, index) {
-                            final option = _contextOptions[index];
-                            final selected = form.selectedContexts.contains(
-                              option.key,
-                            );
-
-                            return _ContextCard(
-                              label: option.label,
-                              icon: option.icon,
-                              iconColor: option.iconColor,
-                              selected: selected,
-                              onTap: () => ref
-                                  .read(logFormProvider.notifier)
-                                  .toggleContext(option.key),
-                            );
-                          },
                         ),
                         const SizedBox(height: 28),
                         const Text(
@@ -262,22 +230,33 @@ class LogScreen extends ConsumerWidget {
                               onPressed: isSubmitting
                                   ? null
                                   : () async {
+                                      final repository = ref.read(
+                                        logRepositoryProvider,
+                                      );
+                                      final submissionNotifier = ref.read(
+                                        logSubmissionProvider.notifier,
+                                      );
                                       try {
-                                        await ref
-                                            .read(logProvider.notifier)
-                                            .createLog(
-                                              severity: form.severity,
-                                              duration: form.duration,
-                                              notes: form.notes,
-                                              timestamp: form.timestamp,
-                                              symptomIds: form.selectedSymptoms
-                                                  .toList(),
-                                              contextIds: form.selectedContexts
-                                                  .toList(),
-                                            );
-                                        ref
-                                            .read(logFormProvider.notifier)
-                                            .reset();
+                                        submissionNotifier.setSubmitting(true);
+                                        if (form.symptomSearch
+                                            .trim()
+                                            .isNotEmpty) {
+                                          formNotifier.addSymptom(
+                                            form.symptomSearch,
+                                          );
+                                        }
+                                        final latestForm = ref.read(
+                                          logFormProvider,
+                                        );
+                                        await repository.createLog(
+                                          severity: latestForm.severity,
+                                          duration: latestForm.duration,
+                                          notes: latestForm.notes,
+                                          timestamp: latestForm.timestamp,
+                                          symptoms: latestForm.symptoms,
+                                        );
+                                        ref.invalidate(logsProvider);
+                                        formNotifier.reset();
                                         if (!context.mounted) {
                                           return;
                                         }
@@ -305,6 +284,8 @@ class LogScreen extends ConsumerWidget {
                                               ),
                                             ),
                                           );
+                                      } finally {
+                                        submissionNotifier.setSubmitting(false);
                                       }
                                     },
                               style: ElevatedButton.styleFrom(
@@ -468,21 +449,62 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
+class _SymptomInputField extends StatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
 
-  const _SearchField({required this.value, required this.onChanged});
+  const _SymptomInputField({
+    required this.value,
+    required this.onChanged,
+    required this.onSubmitted,
+  });
+
+  @override
+  State<_SymptomInputField> createState() => _SymptomInputFieldState();
+}
+
+class _SymptomInputFieldState extends State<_SymptomInputField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SymptomInputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value && _controller.text != widget.value) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return TextField(
-      onChanged: onChanged,
+      controller: _controller,
+      onChanged: widget.onChanged,
+      onSubmitted: (value) {
+        widget.onSubmitted(value);
+        _controller.clear();
+      },
+      textInputAction: TextInputAction.done,
       style: const TextStyle(color: Color(0xFFF5F7FA), fontSize: 16),
       decoration: InputDecoration(
-        hintText: 'Search symptoms...',
+        hintText: 'Type a symptom and press enter',
         hintStyle: const TextStyle(color: Color(0xFF8E99A7), fontSize: 16),
-        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8E99A7)),
+        prefixIcon: const Icon(
+          Icons.add_circle_outline,
+          color: Color(0xFF8E99A7),
+        ),
         filled: true,
         fillColor: const Color(0xFF313A43),
         border: OutlineInputBorder(
@@ -498,122 +520,43 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _SelectionChip extends StatelessWidget {
+class _SymptomChip extends StatelessWidget {
   final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final Color selectedTextColor;
+  final VoidCallback onRemove;
 
-  const _SelectionChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.selectedTextColor,
-  });
+  const _SymptomChip({required this.label, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: onRemove,
         borderRadius: BorderRadius.circular(20),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFF134D87) : const Color(0xFF222C35),
+            color: const Color(0xFF134D87),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF2E78C6)
-                  : const Color(0xFFDBE3ED).withValues(alpha: 0.06),
-            ),
+            border: Border.all(color: const Color(0xFF2E78C6)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                label,
-                style: TextStyle(
+                label.isEmpty ? label : label[0].toUpperCase() + label.substring(1),
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: selected ? selectedTextColor : const Color(0xFFE3EAF3),
-                ),
-              ),
-              if (selected) ...[
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.close_rounded,
-                  size: 16,
                   color: Color(0xFFAED0FF),
                 ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ContextCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color iconColor;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ContextCard({
-    required this.label,
-    required this.icon,
-    required this.iconColor,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFF0D3942) : const Color(0xFF182129),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF1F8492)
-                  : const Color(0xFFDBE3ED).withValues(alpha: 0.05),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 18, color: iconColor),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    color: selected
-                        ? const Color(0xFFABF1F4)
-                        : const Color(0xFFF5F7FA),
-                  ),
-                ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Color(0xFFAED0FF),
               ),
             ],
           ),
@@ -917,67 +860,12 @@ String _formatTime(DateTime value) {
   return '$hour:$minutes $suffix';
 }
 
-class _UiOption {
-  final String key;
-  final String label;
-
-  const _UiOption({required this.key, required this.label});
-}
-
-class _ContextOption extends _UiOption {
-  final IconData icon;
-  final Color iconColor;
-
-  const _ContextOption({
-    required super.key,
-    required super.label,
-    required this.icon,
-    required this.iconColor,
-  });
-}
-
 class _DurationPreset {
   final String label;
   final int minutes;
 
   const _DurationPreset({required this.label, required this.minutes});
 }
-
-const _symptomOptions = [
-  _UiOption(key: 'headache', label: 'Headache'),
-  _UiOption(key: 'nausea', label: 'Nausea'),
-  _UiOption(key: 'fatigue', label: 'Fatigue'),
-  _UiOption(key: 'dizziness', label: 'Dizziness'),
-  _UiOption(key: 'anxiety', label: 'Anxiety'),
-  _UiOption(key: 'brain_fog', label: 'Brain Fog'),
-];
-
-const _contextOptions = [
-  _ContextOption(
-    key: 'stress',
-    label: 'Stress',
-    icon: Icons.local_florist_rounded,
-    iconColor: Color(0xFF87E6EF),
-  ),
-  _ContextOption(
-    key: 'poor_sleep',
-    label: 'Poor Sleep',
-    icon: Icons.nightlight_round,
-    iconColor: Color(0xFF87E6EF),
-  ),
-  _ContextOption(
-    key: 'dehydration',
-    label: 'Dehydration',
-    icon: Icons.water_drop_rounded,
-    iconColor: Color(0xFFA9C7FF),
-  ),
-  _ContextOption(
-    key: 'heavy_meal',
-    label: 'Heavy Meal',
-    icon: Icons.restaurant_rounded,
-    iconColor: Color(0xFFD6B2F7),
-  ),
-];
 
 const _durationPresets = [
   _DurationPreset(label: '< 30m', minutes: 30),
