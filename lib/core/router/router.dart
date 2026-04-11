@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:kairo/features/dashboard/presentation/screens/insights_screen.dart';
+import 'package:kairo/features/dashboard/presentation/screens/reports_screen.dart';
+import 'package:kairo/features/dashboard/presentation/screens/timeline_screen.dart';
 import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
 import 'package:kairo/features/auth/presentation/screens/login_screen.dart';
-
-// ✅ IMPORT YOUR REAL SCREENS
 import 'package:kairo/features/logs/presentation/screens/home_screen.dart';
 import 'package:kairo/features/logs/presentation/screens/log_screen.dart';
 
@@ -33,6 +34,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // 🏠 HOME
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+
+      // 📊 DASHBOARD DESTINATIONS
+      GoRoute(path: '/insights', builder: (_, _) => const InsightsScreen()),
+      GoRoute(path: '/timeline', builder: (_, _) => const TimelineScreen()),
+      GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
 
       // ➕ LOG SCREEN
       GoRoute(path: '/log', builder: (_, _) => const LogScreen()),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:kairo/features/logs/presentation/providers/log_provider.dart';
 import 'package:kairo/features/logs/presentation/widgets/severity_slider.dart';
 
@@ -269,6 +270,10 @@ class LogScreen extends ConsumerWidget {
                                               duration: form.duration,
                                               notes: form.notes,
                                               timestamp: form.timestamp,
+                                              symptomIds: form.selectedSymptoms
+                                                  .toList(),
+                                              contextIds: form.selectedContexts
+                                                  .toList(),
                                             );
                                         ref
                                             .read(logFormProvider.notifier)
@@ -285,7 +290,7 @@ class LogScreen extends ConsumerWidget {
                                               ),
                                             ),
                                           );
-                                        Navigator.of(context).pop();
+                                        context.pop();
                                       } catch (error) {
                                         if (!context.mounted) {
                                           return;
@@ -341,7 +346,6 @@ class LogScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const _BottomNavBar(activeIndex: 1),
               ],
             ),
           ],
@@ -862,88 +866,6 @@ class _NotesFieldState extends ConsumerState<_NotesField> {
           borderSide: const BorderSide(color: Color(0xFF7CDADF)),
         ),
         contentPadding: const EdgeInsets.all(18),
-      ),
-    );
-  }
-}
-
-class _BottomNavBar extends StatelessWidget {
-  final int activeIndex;
-
-  const _BottomNavBar({required this.activeIndex});
-
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (Icons.grid_view_rounded, 'INSIGHTS'),
-      (Icons.timeline_rounded, 'TIMELINE'),
-      (Icons.description_outlined, 'REPORTS'),
-      (Icons.person_rounded, 'PROFILE'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0C151C).withValues(alpha: 0.96),
-        border: Border(
-          top: BorderSide(
-            color: const Color(0xFFDBE3ED).withValues(alpha: 0.04),
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          for (var index = 0; index < items.length; index++)
-            _BottomNavItem(
-              icon: items[index].$1,
-              label: items[index].$2,
-              active: index == activeIndex,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    required this.active,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      width: 72,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFF172C63) : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: active ? const Color(0xFFDCE9FF) : const Color(0xFF8894A3),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 0.7,
-              color: active ? const Color(0xFFDCE9FF) : const Color(0xFF8894A3),
-            ),
-          ),
-        ],
       ),
     );
   }

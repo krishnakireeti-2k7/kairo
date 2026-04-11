@@ -52,7 +52,19 @@ class LogRepository {
 
     final response = await SupabaseService.client
         .from('logs')
-        .select()
+        .select('''
+          id,
+          user_id,
+          timestamp,
+          severity,
+          duration,
+          notes,
+          log_symptoms(
+            symptoms(
+              name
+            )
+          )
+        ''')
         .eq('user_id', user.id)
         .order('timestamp', ascending: false);
 

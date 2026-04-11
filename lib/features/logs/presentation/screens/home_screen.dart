@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kairo/core/widgets/app_bottom_navigation.dart';
 import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
 import 'package:kairo/features/logs/domain/models/log_model.dart';
 import 'package:kairo/features/logs/presentation/providers/log_provider.dart';
@@ -43,7 +44,7 @@ class HomeScreen extends ConsumerWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 120),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         Row(
@@ -169,7 +170,7 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             Positioned(
-              right: 20,
+              right: 16,
               bottom: 94,
               child: FloatingActionButton(
                 onPressed: () => context.push('/log'),
@@ -181,7 +182,7 @@ class HomeScreen extends ConsumerWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              child: _BottomNavBar(activeIndex: 0),
+              child: AppBottomNavigation(),
             ),
           ],
         ),
@@ -317,6 +318,37 @@ class _LogListItem extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (log.symptomNames.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: log.symptomNames
+                      .map(
+                        (symptomName) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF79D9E2,
+                            ).withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            symptomName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFBEECEF),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
               if (log.notes.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -354,7 +386,7 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -411,7 +443,7 @@ class _ReadinessCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(),
       child: Column(
         children: [
@@ -442,7 +474,7 @@ class _ReadinessCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           const Text(
             'Consultation Readiness',
             textAlign: TextAlign.center,
@@ -464,7 +496,7 @@ class _ReadinessCard extends StatelessWidget {
               color: Color(0xFFC4CBD6),
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -482,73 +514,6 @@ class _ReadinessCard extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomNavBar extends StatelessWidget {
-  final int activeIndex;
-
-  const _BottomNavBar({required this.activeIndex});
-
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (Icons.grid_view_rounded, 'INSIGHTS'),
-      (Icons.timeline_rounded, 'TIMELINE'),
-      (Icons.description_outlined, 'REPORTS'),
-      (Icons.person_rounded, 'PROFILE'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0C151C).withValues(alpha: 0.96),
-        border: Border(
-          top: BorderSide(
-            color: const Color(0xFFDBE3ED).withValues(alpha: 0.04),
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          for (var index = 0; index < items.length; index++)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 72,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-              decoration: BoxDecoration(
-                color: activeIndex == index
-                    ? const Color(0xFF172C63)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    items[index].$1,
-                    color: activeIndex == index
-                        ? const Color(0xFFDCE9FF)
-                        : const Color(0xFF8894A3),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    items[index].$2,
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 0.7,
-                      color: activeIndex == index
-                          ? const Color(0xFFDCE9FF)
-                          : const Color(0xFF8894A3),
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
     );
