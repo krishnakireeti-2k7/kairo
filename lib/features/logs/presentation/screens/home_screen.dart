@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kairo/core/widgets/app_bottom_navigation.dart';
 import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
@@ -14,6 +15,8 @@ class HomeScreen extends ConsumerWidget {
     final logsAsync = ref.watch(logsProvider);
     final logs = logsAsync.asData?.value ?? const <LogModel>[];
     final authNotifier = ref.read(authNotifierProvider.notifier);
+    final session = Supabase.instance.client.auth.currentSession;
+    print("TOKEN: ${session?.accessToken}");
 
     return Scaffold(
       backgroundColor: const Color(0xFF09131A),

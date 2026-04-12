@@ -1,31 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kairo/core/widgets/app_bottom_navigation.dart';
+import 'package:kairo/features/logs/presentation/providers/log_provider.dart';
 
-class InsightsScreen extends StatelessWidget {
+class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const _PlaceholderScreen(
-      title: 'Insights',
-      message: 'Insights Screen (Coming Soon)',
-    );
-  }
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final insightAsync = ref.watch(insightProvider);
 
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  final String message;
-
-  const _PlaceholderScreen({required this.title, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Center(child: Text(message, textAlign: TextAlign.center)),
+      appBar: AppBar(
+        title: const Text('Insights'),
+        actions: [
+          IconButton(
+            onPressed: () => ref.invalidate(insightProvider),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: insightAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Error: $error', textAlign: TextAlign.center),
+          ),
+        ),
+        data: (insight) =>
+            Padding(padding: const EdgeInsets.all(16), child: Text(insight)),
       ),
       bottomNavigationBar: const AppBottomNavigation(),
     );
