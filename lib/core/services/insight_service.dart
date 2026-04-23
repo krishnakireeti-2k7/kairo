@@ -1,57 +1,52 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:kairo/core/services/supabase_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class InsightService {
-  Future<String> fetchInsight() async {
-    final session = SupabaseService.client.auth.currentSession;
+  Future<String> fetchInsights() async {
+    final supabase = Supabase.instance.client;
+
+    // ✅ Force refresh
+    await supabase.auth.refreshSession();
+
+    final session = supabase.auth.currentSession;
     final accessToken = session?.accessToken;
 
-    if (accessToken == null || accessToken.isEmpty) {
-      throw Exception('No active Supabase session found.');
+    if (session == null || accessToken == null || accessToken.isEmpty) {
+      throw Exception('No valid Supabase session found.');
     }
 
-    final uri = Uri.parse(_baseUrl).replace(path: '/analyze');
-    final client = HttpClient();
+    // 🔍 Debug
+    print("FRESH TOKEN: $accessToken");
 
-    try {
-      final request = await client.postUrl(uri);
-      request.headers.set(
-        HttpHeaders.authorizationHeader,
-        'Bearer $accessToken',
-      );
-      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      request.add(utf8.encode(jsonEncode(const <String, dynamic>{})));
+    final response = await http.post(
+      Uri.parse('http://10.0.2.2:3000/analyze'),
+      headers: <String, String>{
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(const <String, dynamic>{}),
+    );
 
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
+    print("STATUS: ${response.statusCode}");
+    print("BODY: ${response.body}");
 
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(
-          'Failed to fetch insight: ${response.statusCode} $body',
-        );
-      }
-
-      final decoded = jsonDecode(body) as Map<String, dynamic>;
-      final insight = decoded['insight'] as String?;
-
-      if (insight == null || insight.trim().isEmpty) {
-        throw Exception('Backend returned an empty insight.');
-      }
-
-      return insight;
-    } finally {
-      client.close(force: true);
+    if (response.statusCode != 200) {
+      throw Exception(response.body);
     }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final insight = decoded['insight'] as String?;
+
+    if (insight == null || insight.trim().isEmpty) {
+      throw Exception('Insight not found in response.');
+    }
+
+    return insight;
   }
 
-  String get _baseUrl {
-    if (!kIsWeb && Platform.isAndroid) {
-      return 'http://10.0.2.2:3000';
-    }
-
-    return 'http://localhost:3000';
+  Future<String> fetchInsight() {
+    return fetchInsights();
   }
 }

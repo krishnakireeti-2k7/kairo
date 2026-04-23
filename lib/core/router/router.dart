@@ -27,7 +27,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
 
     refreshListenable: _AuthListenable(ref),
-
     routes: [
       // 🔐 AUTH
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
