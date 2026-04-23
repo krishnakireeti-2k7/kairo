@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:kairo/features/chat/presentation/screens/chat_screen.dart';
 import 'package:kairo/features/dashboard/presentation/screens/insights_screen.dart';
 import 'package:kairo/features/dashboard/presentation/screens/reports_screen.dart';
 import 'package:kairo/features/dashboard/presentation/screens/timeline_screen.dart';
@@ -35,6 +36,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
 
       // 📊 DASHBOARD DESTINATIONS
+      GoRoute(path: '/chat', builder: (_, _) => const ChatScreen()),
       GoRoute(path: '/insights', builder: (_, _) => const InsightsScreen()),
       GoRoute(path: '/timeline', builder: (_, _) => const TimelineScreen()),
       GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),

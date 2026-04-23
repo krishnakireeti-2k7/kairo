@@ -6,6 +6,7 @@ class AppBottomNavigation extends StatelessWidget {
 
   static const _items = <_NavItem>[
     _NavItem(route: '/home', label: 'HOME', icon: Icons.home_rounded),
+    _NavItem(route: '/chat', label: 'CHAT', icon: Icons.forum_rounded),
     _NavItem(
       route: '/insights',
       label: 'INSIGHTS',
@@ -38,44 +39,48 @@ class AppBottomNavigation extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: _items.map((item) {
           final isSelected = location == item.route;
 
-          return InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: isSelected ? null : () => context.go(item.route),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 72,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xFF172C63)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    item.icon,
-                    color: isSelected
-                        ? const Color(0xFFDCE9FF)
-                        : const Color(0xFF8894A3),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 0.7,
+          return Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: isSelected ? null : () => context.go(item.route),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFF172C63)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      item.icon,
                       color: isSelected
                           ? const Color(0xFFDCE9FF)
                           : const Color(0xFF8894A3),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 0.7,
+                        color: isSelected
+                            ? const Color(0xFFDCE9FF)
+                            : const Color(0xFF8894A3),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

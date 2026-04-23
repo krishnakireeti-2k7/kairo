@@ -21,6 +21,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !GEMINI_API_KEY) {
 
 /* ---------------- GEMINI SETUP ---------------- */
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY); // ✅ correct init
+const chatModels = ['gemini-2.5-flash', 'gemini-1.5-flash-latest'];
 
 /* ---------------- AUTH MIDDLEWARE ---------------- */
 function authenticateRequest(req, res, next) {
@@ -73,6 +74,23 @@ function formatLogsForPrompt(logs) {
   return `Logs:\n${lines.join('\n')}`;
 }
 
+function formatChatHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return 'No previous chat history.';
+  }
+
+  return history
+    .slice(-10)
+    .map((entry) => {
+      const role = entry?.role === 'assistant' ? 'Assistant' : 'User';
+      const content =
+        typeof entry?.content === 'string' ? entry.content.trim() : '';
+
+      return `${role}: ${content || '[empty]'}`;
+    })
+    .join('\n');
+}
+
 /* ---------------- GEMINI CALL ---------------- */
 async function generateInsight(prompt) {
   try {
@@ -91,6 +109,39 @@ async function generateInsight(prompt) {
     console.error('Gemini error:', error.message);
     throw error;
   }
+}
+
+async function generateChatReply(prompt) {
+  let lastError = null;
+
+  for (const modelName of chatModels) {
+    try {
+      console.log('Calling chat model:', modelName);
+
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const reply = result.response.text();
+
+      if (!reply || !reply.trim()) {
+        throw new Error('Empty response from Gemini chat model');
+      }
+
+      return reply.trim();
+    } catch (error) {
+      lastError = error;
+      console.error(`Chat model error for ${modelName}:`, error.message);
+
+      const status = error?.status ?? error?.cause?.status;
+      const message = error?.message ?? '';
+      const isModelNotFound = status === 404 || message.includes('404');
+
+      if (!isModelNotFound) {
+        break;
+      }
+    }
+  }
+
+  throw lastError ?? new Error('Chat request failed.');
 }
 
 /* ---------------- MAIN ENDPOINT ---------------- */
@@ -145,6 +196,68 @@ ${logSummary}
 
     return res.status(500).json({
       error: 'Gemini analysis failed',
+      details: error.message,
+    });
+  }
+});
+
+app.post('/chat', authenticateRequest, async (req, res) => {
+  try {
+    const message =
+      typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    const history = Array.isArray(req.body?.history) ? req.body.history : [];
+
+    if (!message) {
+      return res.status(400).json({
+        error: 'Missing message',
+        details: 'Request body must include a non-empty message string.',
+      });
+    }
+
+    console.log('Fetching logs for chat with user JWT...');
+
+    const { data: logs, error } = await req.supabase
+      .from('logs')
+      .select('symptoms, severity, timestamp')
+      .order('timestamp', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error('Supabase chat query error:', error);
+      return res.status(500).json({
+        error: 'Supabase error',
+        details: error.message,
+      });
+    }
+
+    console.log('Fetched chat logs:', logs?.length || 0);
+
+    const prompt = `
+SYSTEM:
+You are a health assistant with access to the user's symptom history.
+Give concise, supportive, practical responses grounded in the user's logs.
+Do not diagnose or claim certainty.
+
+USER DATA:
+${formatLogsForPrompt(logs || [])}
+
+CHAT HISTORY:
+${formatChatHistory(history)}
+
+USER MESSAGE:
+${message}
+`;
+
+    console.log('Chat prompt:', prompt);
+
+    const reply = await generateChatReply(prompt);
+
+    return res.status(200).json({ reply });
+  } catch (error) {
+    console.error('Chat endpoint error:', error.message);
+
+    return res.status(500).json({
+      error: 'Chat failed',
       details: error.message,
     });
   }
