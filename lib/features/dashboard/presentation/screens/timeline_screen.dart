@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kairo/features/dashboard/presentation/providers/timeline_provider.dart';
+import 'package:kairo/features/dashboard/presentation/widgets/severity_indicator.dart';
+import 'package:kairo/features/dashboard/presentation/widgets/timeline_summary_widget.dart';
 import 'package:kairo/features/logs/domain/models/log_model.dart';
 
 class TimelineScreen extends ConsumerStatefulWidget {
@@ -12,6 +16,7 @@ class TimelineScreen extends ConsumerStatefulWidget {
 
 class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -23,6 +28,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -31,7 +37,8 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(timelineProvider);
     final filteredLogs = state.filteredLogs;
-    final groupedLogs = _groupLogs(filteredLogs);
+    final groupedLogs = state.groupedTimelineLogs;
+    final groupedBySymptom = state.groupedBySymptom;
 
     return Scaffold(
       backgroundColor: const Color(0xFF09131A),
@@ -53,14 +60,21 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                   delegate: SliverChildListDelegate([
                     const _HeaderCard(),
                     const SizedBox(height: 16),
+                    TimelineSummaryWidget(summary: state.summary),
+                    const SizedBox(height: 16),
+                    _ViewToggle(
+                      selected: state.viewMode,
+                      onSelected: ref.read(timelineProvider.notifier).setViewMode,
+                    ),
+                    const SizedBox(height: 14),
                     _SearchField(
                       controller: _searchController,
-                      onChanged: ref.read(timelineProvider.notifier).setSearchQuery,
+                      onChanged: _handleSearchChanged,
                     ),
                     const SizedBox(height: 14),
                     _FilterBar(
                       selected: state.timeFilter,
-                      onSelected: ref.read(timelineProvider.notifier).setTimeFilter,
+                      onSelected: ref.read(timelineProvider.notifier).setFilter,
                     ),
                     const SizedBox(height: 18),
                     if (state.isLoading)
@@ -72,7 +86,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                       )
                     else if (filteredLogs.isEmpty)
                       const _EmptyStateCard()
-                    else
+                    else if (state.viewMode == TimelineViewMode.timeline)
                       ...groupedLogs.entries.map((entry) {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 18),
@@ -80,6 +94,13 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                             title: entry.key,
                             logs: entry.value,
                           ),
+                        );
+                      })
+                    else
+                      ...groupedBySymptom.map((group) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 18),
+                          child: _SymptomSection(group: group),
                         );
                       }),
                   ]),
@@ -90,6 +111,16 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
         ),
       ),
     );
+  }
+
+  void _handleSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) {
+        return;
+      }
+      ref.read(timelineProvider.notifier).setSearchQuery(value);
+    });
   }
 }
 
@@ -153,6 +184,52 @@ class _SearchField extends StatelessWidget {
           border: InputBorder.none,
         ),
       ),
+    );
+  }
+}
+
+class _ViewToggle extends StatelessWidget {
+  final TimelineViewMode selected;
+  final ValueChanged<TimelineViewMode> onSelected;
+
+  const _ViewToggle({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: TimelineViewMode.values.map((mode) {
+        final isSelected = mode == selected;
+
+        return Padding(
+          padding: EdgeInsets.only(
+            right: mode == TimelineViewMode.timeline ? 10 : 0,
+          ),
+          child: ChoiceChip(
+            label: Text(mode.label),
+            selected: isSelected,
+            onSelected: (_) => onSelected(mode),
+            labelStyle: TextStyle(
+              color: isSelected
+                  ? const Color(0xFFE8F2FF)
+                  : const Color(0xFFB9C4D1),
+              fontWeight: FontWeight.w600,
+            ),
+            selectedColor: const Color(0xFF2469AE),
+            backgroundColor: const Color(0xFF182129),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(
+                color: isSelected
+                    ? const Color(0xFF2D82D4)
+                    : const Color(0xFFDBE3ED).withValues(alpha: 0.05),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -313,24 +390,7 @@ class _TimelineCard extends StatelessWidget {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: severityColor.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${log.severity}',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: severityColor,
-                          ),
-                        ),
-                      ),
-                    ),
+                    SeverityIndicator(severity: log.severity),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -346,7 +406,9 @@ class _TimelineCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Logged ${_timeAgo(log.timestamp)}',
+                            log.duration > 0
+                                ? '${log.duration} min • ${_timeAgo(log.timestamp)}'
+                                : 'Logged ${_timeAgo(log.timestamp)}',
                             style: const TextStyle(
                               fontSize: 13,
                               color: Color(0xFFB9C4D1),
@@ -373,6 +435,75 @@ class _TimelineCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SymptomSection extends StatelessWidget {
+  final SymptomGroup group;
+
+  const _SymptomSection({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: _panelDecoration(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _titleCase(group.symptom),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFF5F7FA),
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...group.logs.asMap().entries.map((entry) {
+            final log = entry.value;
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: entry.key == group.logs.length - 1 ? 0 : 12,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 94,
+                    child: Text(
+                      _formatShortDate(log.timestamp),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFFA7B0BD),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SeverityIndicator(severity: log.severity),
+                        if (log.duration > 0) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '${log.duration} min',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFFB9C4D1),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }
@@ -482,7 +613,7 @@ class _EmptyStateCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'No logs found',
+            'No symptoms found for this range.',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
@@ -491,7 +622,7 @@ class _EmptyStateCard extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'Start logging symptoms to unlock timeline patterns and trend review.',
+            "Try:\n• Switching to 'All time'\n• Logging a new symptom",
             style: TextStyle(
               fontSize: 15,
               height: 1.5,
@@ -504,37 +635,6 @@ class _EmptyStateCard extends StatelessWidget {
   }
 }
 
-Map<String, List<LogModel>> _groupLogs(List<LogModel> logs) {
-  final grouped = <String, List<LogModel>>{
-    'Today': <LogModel>[],
-    'Yesterday': <LogModel>[],
-    'Older': <LogModel>[],
-  };
-
-  for (final log in logs) {
-    final label = _dayLabel(log.timestamp);
-    grouped[label]!.add(log);
-  }
-
-  grouped.removeWhere((_, value) => value.isEmpty);
-  return grouped;
-}
-
-String _dayLabel(DateTime timestamp) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final date = DateTime(timestamp.year, timestamp.month, timestamp.day);
-  final difference = today.difference(date).inDays;
-
-  if (difference == 0) {
-    return 'Today';
-  }
-  if (difference == 1) {
-    return 'Yesterday';
-  }
-  return 'Older';
-}
-
 BoxDecoration _panelDecoration() {
   return BoxDecoration(
     color: const Color(0xFF182129),
@@ -544,10 +644,10 @@ BoxDecoration _panelDecoration() {
 }
 
 Color _severityColor(int severity) {
-  if (severity <= 3) {
-    return const Color(0xFF7FE0E5);
+  if (severity <= 2) {
+    return const Color(0xFF7FE0A3);
   }
-  if (severity <= 6) {
+  if (severity == 3) {
     return const Color(0xFFFFC468);
   }
   return const Color(0xFFFF8B85);
@@ -581,6 +681,12 @@ String _timeAgo(DateTime timestamp) {
     return '${difference.inHours}h ago';
   }
   return '${difference.inDays}d ago';
+}
+
+String _formatShortDate(DateTime timestamp) {
+  final day = timestamp.day.toString().padLeft(2, '0');
+  final month = timestamp.month.toString().padLeft(2, '0');
+  return '$day/$month/${timestamp.year}';
 }
 
 String _titleCase(String value) {

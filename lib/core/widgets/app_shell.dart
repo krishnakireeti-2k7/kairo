@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:kairo/core/widgets/app_bottom_navigation.dart';
 import 'package:kairo/features/chat/presentation/screens/chat_screen.dart';
-import 'package:kairo/features/dashboard/presentation/screens/reports_screen.dart';
 import 'package:kairo/features/dashboard/presentation/screens/timeline_screen.dart';
 import 'package:kairo/features/logs/presentation/screens/home_screen.dart';
+import 'package:kairo/features/reports/presentation/screens/reports_screen.dart';
 
 class AppShell extends StatefulWidget {
   final int initialIndex;
