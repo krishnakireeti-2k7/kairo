@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kairo/core/widgets/app_bottom_navigation.dart';
 import 'package:kairo/features/chat/presentation/providers/chat_provider.dart';
 import 'package:kairo/features/chat/presentation/widgets/chat_bubble.dart';
 import 'package:kairo/features/chat/presentation/widgets/chat_input.dart';
@@ -44,6 +43,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           curve: Curves.easeOut,
         );
       });
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(chatProvider.notifier).loadMessages();
     });
   }
 
@@ -105,7 +107,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             isSending: chatState.isSending,
             onSend: _handleSend,
           ),
-          const AppBottomNavigation(),
         ],
       ),
     );

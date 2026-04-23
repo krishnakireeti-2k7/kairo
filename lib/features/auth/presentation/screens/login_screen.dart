@@ -229,7 +229,7 @@ class _IntroPanel extends StatelessWidget {
           ),
           SizedBox(height: 10),
           Text(
-            'Sign in with your Google account to securely access clinical insights, documentation, and your workspace.',
+            'Sign in with your Google account to securely access your symptom history, documentation, and workspace.',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 15,

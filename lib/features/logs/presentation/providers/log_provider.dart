@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kairo/core/services/insight_service.dart';
 import 'package:kairo/features/logs/domain/models/log_model.dart';
 import 'package:kairo/features/logs/data/repositories/log_repository.dart';
 
@@ -10,11 +9,6 @@ final logRepositoryProvider = Provider<LogRepository>((ref) {
 final logsProvider = FutureProvider<List<LogModel>>((ref) async {
   final repo = ref.read(logRepositoryProvider);
   return await repo.fetchLogs().timeout(const Duration(seconds: 10));
-});
-
-final insightProvider = FutureProvider<String>((ref) async {
-  final service = InsightService();
-  return service.fetchInsight();
 });
 
 final logSubmissionProvider = NotifierProvider<LogSubmissionNotifier, bool>(

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 class AppBottomNavigation extends StatelessWidget {
-  const AppBottomNavigation({super.key});
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const AppBottomNavigation({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+  });
 
   static const _items = <_NavItem>[
     _NavItem(route: '/home', label: 'HOME', icon: Icons.home_rounded),
     _NavItem(route: '/chat', label: 'CHAT', icon: Icons.forum_rounded),
-    _NavItem(
-      route: '/insights',
-      label: 'INSIGHTS',
-      icon: Icons.grid_view_rounded,
-    ),
     _NavItem(
       route: '/timeline',
       label: 'TIMELINE',
@@ -26,10 +27,8 @@ class AppBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).uri.path;
-
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
       decoration: BoxDecoration(
         color: const Color(0xFF0C151C).withValues(alpha: 0.96),
         border: Border(
@@ -38,53 +37,30 @@ class AppBottomNavigation extends StatelessWidget {
           ),
         ),
       ),
-      child: Row(
-        children: _items.map((item) {
-          final isSelected = location == item.route;
-
-          return Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: isSelected ? null : () => context.go(item.route),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF172C63)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      item.icon,
-                      color: isSelected
-                          ? const Color(0xFFDCE9FF)
-                          : const Color(0xFF8894A3),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.fade,
-                      softWrap: false,
-                      style: TextStyle(
-                        fontSize: 10,
-                        letterSpacing: 0.7,
-                        color: isSelected
-                            ? const Color(0xFFDCE9FF)
-                            : const Color(0xFF8894A3),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+        ),
+        child: BottomNavigationBar(
+          currentIndex: currentIndex,
+          onTap: onTap,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          selectedItemColor: const Color(0xFFDCE9FF),
+          unselectedItemColor: const Color(0xFF8894A3),
+          selectedFontSize: 10,
+          unselectedFontSize: 10,
+          selectedLabelStyle: const TextStyle(letterSpacing: 0.7),
+          unselectedLabelStyle: const TextStyle(letterSpacing: 0.7),
+          items: _items.map((item) {
+            return BottomNavigationBarItem(
+              icon: Icon(item.icon),
+              label: item.label,
+            );
+          }).toList(),
+        ),
       ),
     );
   }

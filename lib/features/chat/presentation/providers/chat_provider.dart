@@ -18,6 +18,20 @@ class ChatNotifier extends Notifier<ChatState> {
     return const ChatState();
   }
 
+  Future<void> loadMessages() async {
+    try {
+      final messages = await ref.read(chatServiceProvider).fetchMessages();
+      state = state.copyWith(
+        messages: messages,
+        errorMessage: null,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        errorMessage: error.toString(),
+      );
+    }
+  }
+
   Future<void> sendMessage(String rawMessage) async {
     final message = rawMessage.trim();
     if (message.isEmpty || state.isSending) {
@@ -41,7 +55,6 @@ class ChatNotifier extends Notifier<ChatState> {
     try {
       final reply = await ref.read(chatServiceProvider).sendMessage(
         message: message,
-        history: pendingMessages,
       );
 
       final assistantMessage = ChatMessage(

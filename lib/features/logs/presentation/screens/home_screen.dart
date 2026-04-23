@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:kairo/core/widgets/app_bottom_navigation.dart';
 import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
 import 'package:kairo/features/logs/domain/models/log_model.dart';
 import 'package:kairo/features/logs/presentation/providers/log_provider.dart';
@@ -15,8 +13,6 @@ class HomeScreen extends ConsumerWidget {
     final logsAsync = ref.watch(logsProvider);
     final logs = logsAsync.asData?.value ?? const <LogModel>[];
     final authNotifier = ref.read(authNotifierProvider.notifier);
-    final session = Supabase.instance.client.auth.currentSession;
-    print("TOKEN: ${session?.accessToken}");
 
     return Scaffold(
       backgroundColor: const Color(0xFF09131A),
@@ -177,18 +173,12 @@ class HomeScreen extends ConsumerWidget {
             ),
             Positioned(
               right: 16,
-              bottom: 94,
+              bottom: 24,
               child: FloatingActionButton(
                 onPressed: () => context.push('/log'),
                 backgroundColor: const Color(0xFF8ED7F7),
                 child: const Icon(Icons.add_rounded, color: Color(0xFF07243B)),
               ),
-            ),
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: AppBottomNavigation(),
             ),
           ],
         ),

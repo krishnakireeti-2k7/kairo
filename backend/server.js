@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // ✅ correct SDK
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -20,8 +20,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !GEMINI_API_KEY) {
 }
 
 /* ---------------- GEMINI SETUP ---------------- */
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY); // ✅ correct init
-const chatModels = ['gemini-2.5-flash', 'gemini-1.5-flash-latest'];
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 /* ---------------- AUTH MIDDLEWARE ---------------- */
 function authenticateRequest(req, res, next) {
@@ -56,219 +55,233 @@ function authenticateRequest(req, res, next) {
   next();
 }
 
-/* ---------------- FORMAT LOGS ---------------- */
+/* ---------------- HELPERS ---------------- */
+
 function formatLogsForPrompt(logs) {
   if (!logs.length) {
-    return 'Logs:\n- No symptom logs found for this user.';
+    return 'Logs:\n- No symptom logs found.';
   }
 
-  const lines = logs.map((log) => {
-    const symptoms =
-      Array.isArray(log.symptoms) && log.symptoms.length
-        ? log.symptoms.join(', ')
-        : 'No symptoms';
+  return (
+    'Logs:\n' +
+    logs
+      .map((log) => {
+        const symptoms =
+          Array.isArray(log.symptoms) && log.symptoms.length
+            ? log.symptoms.join(', ')
+            : 'No symptoms';
 
-    return `- ${symptoms} (severity ${log.severity}, timestamp ${log.timestamp})`;
-  });
-
-  return `Logs:\n${lines.join('\n')}`;
+        return `- ${symptoms} (severity ${log.severity}, ${log.timestamp})`;
+      })
+      .join('\n')
+  );
 }
 
-function formatChatHistory(history) {
-  if (!Array.isArray(history) || history.length === 0) {
-    return 'No previous chat history.';
-  }
+function formatChatHistory(messages) {
+  if (!messages.length) return 'No previous chat.';
 
-  return history
-    .slice(-10)
-    .map((entry) => {
-      const role = entry?.role === 'assistant' ? 'Assistant' : 'User';
-      const content =
-        typeof entry?.content === 'string' ? entry.content.trim() : '';
-
-      return `${role}: ${content || '[empty]'}`;
-    })
+  return messages
+    .map((m) =>
+      m.role === 'assistant'
+        ? `Assistant: ${m.content}`
+        : `User: ${m.content}`
+    )
     .join('\n');
 }
 
-/* ---------------- GEMINI CALL ---------------- */
-async function generateInsight(prompt) {
+/* ---------------- GEMINI ---------------- */
+
+async function generateGeminiResponse(prompt) {
   try {
     console.log('Calling Gemini...');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });  
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+    });
+
     const result = await model.generateContent(prompt);
-    const insight = result.response.text(); 
+    const text = result.response.text();
 
-    if (!insight || !insight.trim()) {
-      throw new Error('Empty response from Gemini');
+    if (!text || !text.trim()) {
+      throw new Error('Empty Gemini response');
     }
 
-    return insight.trim();
-  } catch (error) {
-    console.error('Gemini error:', error.message);
-    throw error;
+    return text.trim();
+  } catch (err) {
+    console.error('Gemini error:', err.message);
+    throw err;
   }
 }
 
-async function generateChatReply(prompt) {
-  let lastError = null;
+/* ---------------- ANALYZE ---------------- */
 
-  for (const modelName of chatModels) {
-    try {
-      console.log('Calling chat model:', modelName);
-
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
-      const reply = result.response.text();
-
-      if (!reply || !reply.trim()) {
-        throw new Error('Empty response from Gemini chat model');
-      }
-
-      return reply.trim();
-    } catch (error) {
-      lastError = error;
-      console.error(`Chat model error for ${modelName}:`, error.message);
-
-      const status = error?.status ?? error?.cause?.status;
-      const message = error?.message ?? '';
-      const isModelNotFound = status === 404 || message.includes('404');
-
-      if (!isModelNotFound) {
-        break;
-      }
-    }
-  }
-
-  throw lastError ?? new Error('Chat request failed.');
-}
-
-/* ---------------- MAIN ENDPOINT ---------------- */
 app.post('/analyze', authenticateRequest, async (req, res) => {
   try {
-    console.log('Fetching logs with user JWT...');
-
     const { data: logs, error } = await req.supabase
       .from('logs')
       .select('symptoms, severity, timestamp')
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('Supabase query error:', error);
       return res.status(500).json({
         error: 'Supabase error',
         details: error.message,
       });
     }
 
-    console.log('Fetched logs:', logs?.length || 0);
-
-    const logSummary = formatLogsForPrompt(logs || []);
-
     const prompt = `
-You are an intelligent health insights engine.
+You are a health insights assistant.
 
-Given symptom logs, do NOT just say "not enough data".
-Instead:
-- Extract whatever signal is possible
-- Make reasonable hypotheses
-- Suggest what to track next
+Extract real value even from limited data.
 
-Be practical and actionable.
-
-Format:
-1. Key Observation
-2. Possible Interpretation
-3. What To Track Next
-4. Actionable Advice
-
-Keep it concise.
-
-${logSummary}
+${formatLogsForPrompt(logs || [])}
 `;
 
-    const insight = await generateInsight(prompt);
+    const insight = await generateGeminiResponse(prompt);
 
-    return res.status(200).json({ insight });
-  } catch (error) {
-    console.error('Analyze endpoint error:', error.message);
-
-    return res.status(500).json({
-      error: 'Gemini analysis failed',
-      details: error.message,
+    res.json({ insight });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Analyze failed',
+      details: err.message,
     });
   }
 });
+
+/* ---------------- CHAT (PERSISTENT) ---------------- */
 
 app.post('/chat', authenticateRequest, async (req, res) => {
   try {
     const message =
       typeof req.body?.message === 'string' ? req.body.message.trim() : '';
-    const history = Array.isArray(req.body?.history) ? req.body.history : [];
 
     if (!message) {
       return res.status(400).json({
-        error: 'Missing message',
-        details: 'Request body must include a non-empty message string.',
+        error: 'Message required',
       });
     }
 
-    console.log('Fetching logs for chat with user JWT...');
+    /* -------- GET USER -------- */
+    const {
+      data: { user },
+      error: userError,
+    } = await req.supabase.auth.getUser();
 
-    const { data: logs, error } = await req.supabase
+    if (userError || !user) {
+      return res.status(401).json({
+        error: 'Invalid user',
+      });
+    }
+
+    const userId = user.id;
+
+    /* -------- SAVE USER MESSAGE -------- */
+    await req.supabase.from('chat_messages').insert({
+      user_id: userId,
+      role: 'user',
+      content: message,
+    });
+
+    /* -------- FETCH LOGS -------- */
+    const { data: logs } = await req.supabase
       .from('logs')
       .select('symptoms, severity, timestamp')
+      .eq('user_id', userId)
       .order('timestamp', { ascending: false })
       .limit(10);
 
-    if (error) {
-      console.error('Supabase chat query error:', error);
-      return res.status(500).json({
-        error: 'Supabase error',
-        details: error.message,
-      });
-    }
+    /* -------- FETCH CHAT HISTORY -------- */
+    const { data: history } = await req.supabase
+      .from('chat_messages')
+      .select('role, content')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(20);
 
-    console.log('Fetched chat logs:', logs?.length || 0);
-
+    /* -------- BUILD PROMPT -------- */
     const prompt = `
 SYSTEM:
-You are a health assistant with access to the user's symptom history.
-Give concise, supportive, practical responses grounded in the user's logs.
-Do not diagnose or claim certainty.
+You are a health assistant.
+Use user logs + chat history.
+Be practical, not generic.
+Do NOT diagnose.
 
 USER DATA:
 ${formatLogsForPrompt(logs || [])}
 
 CHAT HISTORY:
-${formatChatHistory(history)}
+${formatChatHistory(history || [])}
 
 USER MESSAGE:
 ${message}
 `;
 
-    console.log('Chat prompt:', prompt);
+    console.log('Chat prompt built');
 
-    const reply = await generateChatReply(prompt);
+    /* -------- GEMINI -------- */
+    const reply = await generateGeminiResponse(prompt);
 
-    return res.status(200).json({ reply });
-  } catch (error) {
-    console.error('Chat endpoint error:', error.message);
+    /* -------- SAVE AI MESSAGE -------- */
+    await req.supabase.from('chat_messages').insert({
+      user_id: userId,
+      role: 'assistant',
+      content: reply,
+    });
+
+    return res.json({ reply });
+  } catch (err) {
+    console.error('Chat error:', err.message);
 
     return res.status(500).json({
       error: 'Chat failed',
-      details: error.message,
+      details: err.message,
     });
   }
 });
 
-/* ---------------- HEALTH CHECK ---------------- */
+app.get('/messages', authenticateRequest, async (req, res) => {
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await req.supabase.auth.getUser();
+
+    if (userError || !user) {
+      return res.status(401).json({
+        error: 'Invalid user',
+      });
+    }
+
+    const { data, error } = await req.supabase
+      .from('chat_messages')
+      .select('id, role, content, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({
+        error: 'Failed to fetch messages',
+        details: error.message,
+      });
+    }
+
+    return res.json({ messages: data });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'Failed to fetch messages',
+      details: err.message,
+    });
+  }
+});
+
+/* ---------------- HEALTH ---------------- */
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-/* ---------------- START SERVER ---------------- */
+/* ---------------- START ---------------- */
+
 app.listen(port, () => {
-  console.log(`Backend listening on http://localhost:${port}`);
+  console.log(`Backend running on http://localhost:${port}`);
 });

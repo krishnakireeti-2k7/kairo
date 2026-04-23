@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:kairo/core/widgets/app_bottom_navigation.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -17,7 +16,6 @@ class ReportsScreen extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: const AppBottomNavigation(),
     );
   }
 }

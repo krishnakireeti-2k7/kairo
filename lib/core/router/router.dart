@@ -2,13 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:kairo/features/chat/presentation/screens/chat_screen.dart';
-import 'package:kairo/features/dashboard/presentation/screens/insights_screen.dart';
-import 'package:kairo/features/dashboard/presentation/screens/reports_screen.dart';
-import 'package:kairo/features/dashboard/presentation/screens/timeline_screen.dart';
 import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
 import 'package:kairo/features/auth/presentation/screens/login_screen.dart';
-import 'package:kairo/features/logs/presentation/screens/home_screen.dart';
+import 'package:kairo/core/widgets/app_shell.dart';
 import 'package:kairo/features/logs/presentation/screens/log_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -33,13 +29,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
 
       // 🏠 HOME
-      GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
-
-      // 📊 DASHBOARD DESTINATIONS
-      GoRoute(path: '/chat', builder: (_, _) => const ChatScreen()),
-      GoRoute(path: '/insights', builder: (_, _) => const InsightsScreen()),
-      GoRoute(path: '/timeline', builder: (_, _) => const TimelineScreen()),
-      GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
+      GoRoute(path: '/home', builder: (_, _) => const AppShell(initialIndex: 0)),
+      GoRoute(path: '/chat', builder: (_, _) => const AppShell(initialIndex: 1)),
+      GoRoute(
+        path: '/timeline',
+        builder: (_, _) => const AppShell(initialIndex: 2),
+      ),
+      GoRoute(
+        path: '/reports',
+        builder: (_, _) => const AppShell(initialIndex: 3),
+      ),
 
       // ➕ LOG SCREEN
       GoRoute(path: '/log', builder: (_, _) => const LogScreen()),
