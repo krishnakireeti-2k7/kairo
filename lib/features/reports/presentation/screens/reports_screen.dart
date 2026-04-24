@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:kairo/features/reports/presentation/providers/report_provider.dart';
 import 'package:kairo/features/reports/presentation/widgets/report_card.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -13,6 +15,11 @@ class ReportsScreen extends ConsumerStatefulWidget {
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   late final ProviderSubscription<ReportState> _reportSubscription;
+  PdfControllerPinch? _pdfController;
+  bool _showPdf = false;
+  bool _pdfLoading = false;
+  String? _pdfError;
+  String? _openedUrl;
 
   @override
   void initState() {
@@ -39,13 +46,95 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   void dispose() {
     _reportSubscription.close();
+    _pdfController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _openPdf(String url) async {
+    // Already showing this PDF — collapse it
+    if (_showPdf && _openedUrl == url) {
+      _pdfController?.dispose();
+      setState(() {
+        _showPdf = false;
+        _pdfController = null;
+        _openedUrl = null;
+        _pdfError = null;
+      });
+      return;
+    }
+
+    // Dispose previous if switching reports
+    _pdfController?.dispose();
+    setState(() {
+      _showPdf = true;
+      _pdfLoading = true;
+      _pdfError = null;
+      _openedUrl = url;
+      _pdfController = null;
+    });
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) {
+        throw Exception('Server returned ${response.statusCode}');
+      }
+      final controller = PdfControllerPinch(
+        document: PdfDocument.openData(response.bodyBytes),
+      );
+      if (!mounted) return;
+      setState(() {
+        _pdfController = controller;
+        _pdfLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _pdfLoading = false;
+        _pdfError = e.toString();
+      });
+    }
+  }
+
+  void _closePdf() {
+    _pdfController?.dispose();
+    setState(() {
+      _showPdf = false;
+      _pdfController = null;
+      _openedUrl = null;
+      _pdfError = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(reportProvider);
 
+    // Full-screen PDF view
+    if (_showPdf) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF09131A),
+        appBar: AppBar(
+          title: const Text('Report'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _closePdf,
+          ),
+          actions: [
+            if (_openedUrl != null)
+              IconButton(
+                onPressed: () => launchUrl(
+                  Uri.parse(_openedUrl!),
+                  mode: LaunchMode.externalApplication,
+                ),
+                icon: const Icon(Icons.download_rounded),
+              ),
+          ],
+        ),
+        body: _buildPdfBody(),
+      );
+    }
+
+    // Normal reports list
     return Scaffold(
       backgroundColor: const Color(0xFF09131A),
       appBar: AppBar(title: const Text('Reports')),
@@ -92,9 +181,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           FilledButton(
                             onPressed: state.isGenerating
                                 ? null
-                                : () {
-                                    ref.read(reportProvider.notifier).generateReport();
-                                  },
+                                : () => ref
+                                      .read(reportProvider.notifier)
+                                      .generateReport(),
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF2469AE),
                               foregroundColor: const Color(0xFFE8F2FF),
@@ -125,14 +214,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       ...state.reports.asMap().entries.map((entry) {
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: entry.key == state.reports.length - 1 ? 0 : 14,
+                            bottom: entry.key == state.reports.length - 1
+                                ? 0
+                                : 14,
                           ),
                           child: ReportCard(
                             report: entry.value,
-                            onOpen: () => _launch(entry.value.url),
-                            onDownload: () => _launch(
-                              entry.value.url,
-                              external: true,
+                            onOpen: () => _openPdf(entry.value.url),
+                            onDownload: () => launchUrl(
+                              Uri.parse(entry.value.url),
+                              mode: LaunchMode.externalApplication,
                             ),
                           ),
                         );
@@ -147,23 +238,102 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Future<void> _launch(String url, {bool external = false}) async {
-    final uri = Uri.parse(url);
-    final launched = await launchUrl(
-      uri,
-      mode: external ? LaunchMode.externalApplication : LaunchMode.platformDefault,
-    );
-
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Unable to open report.'),
-            backgroundColor: Color(0xFF7A2F36),
-          ),
-        );
+  Widget _buildPdfBody() {
+    if (_pdfLoading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF79D9E2)),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Loading report...',
+              style: TextStyle(color: Color(0xFFC4CBD6), fontSize: 14),
+            ),
+          ],
+        ),
+      );
     }
+
+    if (_pdfError != null || _pdfController == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.picture_as_pdf_outlined,
+                size: 48,
+                color: Color(0xFF79D9E2),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Failed to load report',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFF5F7FA),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _pdfError ?? 'Unknown error',
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: Color(0xFFC4CBD6),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => launchUrl(
+                  Uri.parse(_openedUrl!),
+                  mode: LaunchMode.externalApplication,
+                ),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('Open in Browser'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2469AE),
+                  foregroundColor: const Color(0xFFE8F2FF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return PdfViewPinch(
+      controller: _pdfController!,
+      builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
+        options: const DefaultBuilderOptions(),
+        documentLoaderBuilder: (_) => const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF79D9E2)),
+          ),
+        ),
+        pageLoaderBuilder: (_) => const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF79D9E2)),
+          ),
+        ),
+        errorBuilder: (_, error) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _pdfError = error.toString();
+                _pdfController = null;
+              });
+            }
+          });
+          return const SizedBox.shrink();
+        },
+      ),
+    );
   }
 }
 
@@ -223,8 +393,6 @@ BoxDecoration _panelDecoration() {
   return BoxDecoration(
     color: const Color(0xFF182129),
     borderRadius: BorderRadius.circular(18),
-    border: Border.all(
-      color: const Color(0xFFDBE3ED).withValues(alpha: 0.05),
-    ),
+    border: Border.all(color: const Color(0xFFDBE3ED).withValues(alpha: 0.05)),
   );
 }
