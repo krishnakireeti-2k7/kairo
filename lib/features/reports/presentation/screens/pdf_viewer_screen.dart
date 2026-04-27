@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdfx/pdfx.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -55,25 +56,41 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF09131A),
-      appBar: AppBar(
-        title: const Text('Report'),
-        actions: [
-          IconButton(
-            onPressed: () => launchUrl(
-              Uri.parse(widget.url),
-              mode: LaunchMode.externalApplication,
-            ),
-            icon: const Icon(Icons.download_rounded),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && context.canPop()) {
+          context.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF09131A),
+        appBar: AppBar(
+          title: const Text('Report'),
+          leading: IconButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              }
+            },
+            icon: const Icon(Icons.arrow_back_rounded),
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: _buildBody(),
+          actions: [
+            IconButton(
+              onPressed: () => launchUrl(
+                Uri.parse(widget.url),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.download_rounded),
+            ),
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: _buildBody(),
+          ),
         ),
       ),
     );

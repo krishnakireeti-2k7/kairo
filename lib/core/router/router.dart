@@ -6,6 +6,7 @@ import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
 import 'package:kairo/features/auth/presentation/screens/login_screen.dart';
 import 'package:kairo/core/widgets/app_shell.dart';
 import 'package:kairo/features/logs/presentation/screens/log_screen.dart';
+import 'package:kairo/features/reports/presentation/screens/pdf_viewer_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(isSignedInProvider);
@@ -29,8 +30,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
 
       // 🏠 HOME
-      GoRoute(path: '/home', builder: (_, _) => const AppShell(initialIndex: 0)),
-      GoRoute(path: '/chat', builder: (_, _) => const AppShell(initialIndex: 1)),
+      GoRoute(
+        path: '/home',
+        builder: (_, _) => const AppShell(initialIndex: 0),
+      ),
+      GoRoute(
+        path: '/chat',
+        builder: (_, _) => const AppShell(initialIndex: 1),
+      ),
       GoRoute(
         path: '/timeline',
         builder: (_, _) => const AppShell(initialIndex: 2),
@@ -38,6 +45,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/reports',
         builder: (_, _) => const AppShell(initialIndex: 3),
+      ),
+      GoRoute(
+        path: '/reports/pdf',
+        builder: (_, state) {
+          final url = state.extra as String? ?? '';
+          return PdfViewerScreen(url: url);
+        },
       ),
 
       // ➕ LOG SCREEN
