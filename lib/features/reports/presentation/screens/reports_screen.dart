@@ -243,7 +243,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         );
       },
     );
-    controller.dispose();
 
     if (!context.mounted) {
       return;
@@ -254,11 +253,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return;
     }
 
-    _runAfterRouteSettles(() {
-      ref
-          .read(reportActionsProvider)
-          .renameReport(reportId: report.id, name: trimmed);
-    });
+    ref
+        .read(reportActionsProvider)
+        .renameReport(reportId: report.id, name: trimmed);
   }
 
   Future<void> _confirmDelete(ReportModel report) async {
