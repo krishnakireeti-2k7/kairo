@@ -671,21 +671,59 @@ class _LogsSection extends StatelessWidget {
           );
         }
 
+        final previewLogs = logs.take(3).toList();
+
         return Container(
           decoration: _panelDecoration(),
-          child: ListView.builder(
-            itemCount: logs.length,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: index == logs.length - 1 ? 0 : 16,
+          child: Column(
+            children: [
+              ListView.builder(
+                itemCount: previewLogs.length,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  logs.length > 3 ? 10 : 16,
                 ),
-                child: _LogListItem(log: logs[index]),
-              );
-            },
+                itemBuilder: (context, index) {
+                  final log = previewLogs[index];
+
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == previewLogs.length - 1 ? 0 : 16,
+                    ),
+                    child: _LogListItem(log: log),
+                  );
+                },
+              ),
+              if (logs.length > 3) ...[
+                const SizedBox(height: 2),
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.push('/timeline'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF84E3E6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Show more',
+                      style: TextStyle(
+                        color: Color(0xFF84E3E6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
           ),
         );
       },

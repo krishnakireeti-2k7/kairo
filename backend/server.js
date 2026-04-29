@@ -351,16 +351,15 @@ function drawReportHeader(doc, { colors, generatedAt, reportId }) {
       { width: getContentWidth(doc) }
     );
 
-  doc.y = 125;
+  doc.moveDown(1.7);
 }
 
 function addSectionHeading(doc, colors, heading) {
-  ensureSpace(doc, 52);
   doc
     .fillColor(colors.heading)
     .font('Helvetica-Bold')
     .fontSize(12)
-    .text(heading, doc.page.margins.left, doc.y, {
+    .text(heading, {
       width: getContentWidth(doc),
     });
 
@@ -420,17 +419,13 @@ function addSymptomAnalysisSection(doc, colors, symptoms) {
         ];
 
   for (const [index, symptom] of safeSymptoms.entries()) {
-    ensureSpace(doc, 94);
     const startX = doc.page.margins.left;
-    const labelX = startX + 12;
-    const valueX = startX + 120;
-    const rowGap = 14;
 
     doc
       .fillColor(colors.body)
       .font('Helvetica-Bold')
       .fontSize(10)
-      .text(titleCase(symptom.symptom), startX, doc.y, {
+      .text(titleCase(symptom.symptom), {
         width: getContentWidth(doc),
       });
     doc.moveDown(0.35);
@@ -442,25 +437,30 @@ function addSymptomAnalysisSection(doc, colors, symptoms) {
     ];
 
     for (const [label, value] of rows) {
-      const y = doc.y;
       doc
         .fillColor(colors.subtext)
         .font('Helvetica')
         .fontSize(9)
-        .text(label, labelX, y, { width: 95 });
+        .text(`${label}: `, {
+          continued: true,
+        });
+
       doc
         .fillColor(colors.body)
         .font('Helvetica')
         .fontSize(9.5)
-        .text(value, valueX, y, { width: getContentWidth(doc) - 120 });
-      doc.y = y + rowGap;
+        .text(value, {
+          width: getContentWidth(doc),
+        });
+
+      doc.moveDown(0.3);
     }
 
     doc
       .fillColor(colors.subtext)
       .font('Helvetica-Oblique')
       .fontSize(9)
-      .text(symptom.notes, labelX, doc.y + 2, {
+      .text(symptom.notes, {
         width: getContentWidth(doc) - 24,
         lineGap: 3,
       });
@@ -504,19 +504,18 @@ function addNumberedSection(doc, colors, heading, items) {
   const safeItems = items && items.length ? items : ['No data available.'];
 
   safeItems.forEach((item, index) => {
-    ensureSpace(doc, 34);
-    const x = doc.page.margins.left;
-    const y = doc.y;
     doc
       .fillColor(colors.body)
       .font('Helvetica-Bold')
       .fontSize(11)
-      .text(`${index + 1}.`, x, y, { width: 24 });
+      .text(`${index + 1}. `, {
+        continued: true,
+      });
     doc
       .font('Helvetica')
       .fontSize(11)
-      .text(item, x + 26, y, {
-        width: getContentWidth(doc) - 26,
+      .text(item, {
+        width: getContentWidth(doc),
         lineGap: 4,
       });
     doc.moveDown(0.55);
@@ -584,17 +583,15 @@ function addDataConfidenceSection(doc, colors, dataConfidence) {
 }
 
 function addBullet(doc, colors, item, fontSize) {
-  ensureSpace(doc, 30);
-  const x = doc.page.margins.left;
-  const y = doc.y;
-
   doc
     .fillColor(colors.body)
     .font('Helvetica')
     .fontSize(fontSize)
-    .text('•', x, y, { width: 12 });
-  doc.text(item, x + 16, y, {
-    width: getContentWidth(doc) - 16,
+    .text('• ', {
+      continued: true,
+    });
+  doc.text(item, {
+    width: getContentWidth(doc),
     lineGap: 5,
   });
   doc.moveDown(0.45);
@@ -603,10 +600,11 @@ function addBullet(doc, colors, item, fontSize) {
 function addFooters(doc, colors) {
   const range = doc.bufferedPageRange();
 
-  for (let i = range.start; i < range.start + range.count; i++) {
-    doc.switchToPage(i);
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
 
     const footerY = doc.page.height - 42;
+
     doc
       .moveTo(doc.page.margins.left, footerY)
       .lineTo(doc.page.width - doc.page.margins.right, footerY)
@@ -618,20 +616,19 @@ function addFooters(doc, colors) {
       .fillColor(colors.subtext)
       .font('Helvetica')
       .fontSize(8)
-      .text('Kairo Health — Confidential Patient Document', doc.page.margins.left, footerY + 10, {
-        width: 250,
-      })
-      .text(`Page ${i + 1} of ${range.count}`, doc.page.width - doc.page.margins.right - 90, footerY + 10, {
-        width: 90,
-        align: 'right',
-      });
-  }
-}
+      .text(
+        'Kairo Health — Confidential Patient Document',
+        doc.page.margins.left,
+        footerY + 10,
+        { width: 250, height: 12 }
+      );
 
-function ensureSpace(doc, height) {
-  const bottom = doc.page.height - doc.page.margins.bottom - 46;
-  if (doc.y + height > bottom) {
-    doc.addPage();
+    doc.text(
+      `Page ${i + 1}`,
+      doc.page.width - doc.page.margins.right - 90,
+      footerY + 10,
+      { width: 90, align: 'right', height: 12 }
+    );
   }
 }
 
