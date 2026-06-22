@@ -1,13 +1,12 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:kairo/core/config/api_config.dart';
 import 'package:kairo/features/chat/domain/models/chat_message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChatService {
-  Future<String> sendMessage({
-    required String message,
-  }) async {
+  Future<String> sendMessage({required String message}) async {
     final session = Supabase.instance.client.auth.currentSession;
     final accessToken = session?.accessToken;
 
@@ -21,14 +20,12 @@ class ChatService {
     }
 
     final response = await http.post(
-      Uri.parse('http://10.0.2.2:3000/chat'),
+      Uri.parse('${ApiConfig.baseUrl}/chat'),
       headers: <String, String>{
         'Authorization': 'Bearer $accessToken',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({
-        'message': trimmedMessage,
-      }),
+      body: jsonEncode({'message': trimmedMessage}),
     );
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -58,7 +55,7 @@ class ChatService {
     }
 
     final response = await http.get(
-      Uri.parse('http://10.0.2.2:3000/messages'),
+      Uri.parse('${ApiConfig.baseUrl}/messages'),
       headers: <String, String>{
         'Authorization': 'Bearer $accessToken',
         'Content-Type': 'application/json',

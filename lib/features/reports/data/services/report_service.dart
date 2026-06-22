@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:kairo/core/config/api_config.dart';
 import 'package:kairo/features/reports/domain/models/report_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ReportService {
-  static const String _baseUrl = 'http://10.0.2.2:3000';
+  static const String _baseUrl = ApiConfig.baseUrl;
 
   Future<List<ReportModel>> fetchReports() async {
     final accessToken = _accessToken;
