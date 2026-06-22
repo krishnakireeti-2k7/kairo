@@ -28,6 +28,8 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const REPORT_SIGNED_URL_EXPIRES_IN_SECONDS = 300;
+
 /* ---------------- AUTH MIDDLEWARE ---------------- */
 function authenticateRequest(req, res, next) {
   const authHeader = req.headers.authorization || '';
@@ -723,6 +725,23 @@ function getReportStoragePath(fileUrl) {
   }
 }
 
+function resolveReportStoragePath(report) {
+  if (typeof report?.file_path === 'string' && report.file_path.trim()) {
+    return report.file_path.trim();
+  }
+
+  return getReportStoragePath(report?.file_url);
+}
+
+function logSignedUrlEvent({ reportId, userId, status, reason }) {
+  console.log('Signed URL request:', {
+    reportId,
+    userId,
+    status,
+    reason,
+  });
+}
+
 /* ---------------- GEMINI ---------------- */
 
 async function generateGeminiResponse(prompt) {
@@ -973,6 +992,7 @@ app.post('/generate-report', authenticateRequest, async (req, res) => {
       .insert({
         user_id: user.id,
         name: 'Health Report',
+        file_path: filePath,
         file_url: publicUrl,
         is_starred: false,
       })
@@ -1031,6 +1051,115 @@ app.get('/reports', authenticateRequest, async (req, res) => {
   } catch (err) {
     return res.status(500).json({
       error: 'Failed to fetch reports',
+      details: err.message,
+    });
+  }
+});
+
+app.get('/reports/:id/signed-url', authenticateRequest, async (req, res) => {
+  const reportId = req.params.id;
+  let userId = null;
+
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await req.supabase.auth.getUser();
+
+    if (userError || !user) {
+      logSignedUrlEvent({
+        reportId,
+        userId,
+        status: 'failure',
+        reason: 'unauthorized',
+      });
+      return res.status(401).json({
+        error: 'Unauthorized',
+      });
+    }
+
+    userId = user.id;
+
+    const { data: report, error: fetchError } = await supabaseAdmin
+      .from('reports')
+      .select('id, user_id, file_path, file_url')
+      .eq('id', reportId)
+      .single();
+
+    if (fetchError || !report) {
+      logSignedUrlEvent({
+        reportId,
+        userId,
+        status: 'failure',
+        reason: 'not_found',
+      });
+      return res.status(404).json({
+        error: 'Report not found',
+      });
+    }
+
+    if (report.user_id !== userId) {
+      logSignedUrlEvent({
+        reportId,
+        userId,
+        status: 'failure',
+        reason: 'forbidden',
+      });
+      return res.status(403).json({
+        error: 'Forbidden',
+      });
+    }
+
+    const storagePath = resolveReportStoragePath(report);
+    if (!storagePath) {
+      logSignedUrlEvent({
+        reportId,
+        userId,
+        status: 'failure',
+        reason: 'missing_storage_path',
+      });
+      return res.status(404).json({
+        error: 'Report file not found',
+      });
+    }
+
+    const { data, error: signedUrlError } = await supabaseAdmin.storage
+      .from('reports')
+      .createSignedUrl(storagePath, REPORT_SIGNED_URL_EXPIRES_IN_SECONDS);
+
+    if (signedUrlError || !data?.signedUrl) {
+      logSignedUrlEvent({
+        reportId,
+        userId,
+        status: 'failure',
+        reason: 'signed_url_error',
+      });
+      return res.status(500).json({
+        error: 'Failed to create signed URL',
+        details: signedUrlError?.message,
+      });
+    }
+
+    logSignedUrlEvent({
+      reportId,
+      userId,
+      status: 'success',
+      reason: 'created',
+    });
+
+    return res.json({
+      url: data.signedUrl,
+      expires_in: REPORT_SIGNED_URL_EXPIRES_IN_SECONDS,
+    });
+  } catch (err) {
+    logSignedUrlEvent({
+      reportId,
+      userId,
+      status: 'failure',
+      reason: 'internal_error',
+    });
+    return res.status(500).json({
+      error: 'Failed to create signed URL',
       details: err.message,
     });
   }
@@ -1115,7 +1244,7 @@ app.delete('/reports/:id', authenticateRequest, async (req, res) => {
 
     const { data: report, error: fetchError } = await supabaseAdmin
       .from('reports')
-      .select('id, file_url')
+      .select('id, file_path, file_url')
       .eq('id', req.params.id)
       .eq('user_id', user.id)
       .single();
@@ -1127,7 +1256,7 @@ app.delete('/reports/:id', authenticateRequest, async (req, res) => {
       });
     }
 
-    const storagePath = getReportStoragePath(report.file_url);
+    const storagePath = resolveReportStoragePath(report);
     if (storagePath) {
       const { error: storageError } = await supabaseAdmin.storage
         .from('reports')
