@@ -14,7 +14,12 @@ class ReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
+  static const Duration _signedUrlCacheDuration = Duration(seconds: 280);
+  static const Duration _signedUrlRequestTimeout = Duration(seconds: 15);
+
   late final ProviderSubscription<ReportState> _reportSubscription;
+  final Map<String, _CachedSignedUrl> _signedUrlCache = {};
+  final Map<String, _ReportAccessAction> _pendingReportActions = {};
   bool _showStarredOnly = false;
 
   @override
@@ -105,6 +110,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               .entries
                               .map((entry) {
                                 final report = entry.value;
+                                final pendingAction =
+                                    _pendingReportActions[report.id];
                                 return Padding(
                                   padding: EdgeInsets.only(
                                     bottom:
@@ -117,17 +124,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                     isStarBusy: state.pendingStarIds.contains(
                                       report.id,
                                     ),
-                                    onOpen: () {
-                                      if (!context.mounted) return;
-                                      context.push(
-                                        '/reports/pdf',
-                                        extra: report.url,
-                                      );
-                                    },
-                                    onDownload: () => launchUrl(
-                                      Uri.parse(report.url),
-                                      mode: LaunchMode.externalApplication,
-                                    ),
+                                    isAccessBusy: pendingAction != null,
+                                    isOpenBusy:
+                                        pendingAction ==
+                                        _ReportAccessAction.open,
+                                    isDownloadBusy:
+                                        pendingAction ==
+                                        _ReportAccessAction.download,
+                                    onOpen: () => _openReport(report),
+                                    onDownload: () => _downloadReport(report),
                                     onRename: () => _showRenameSheet(report),
                                     onDelete: () => _confirmDelete(report),
                                     onToggleStar: () {
@@ -296,6 +301,91 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     await ref.read(reportActionsProvider).deleteReport(report.id);
   }
 
+  Future<void> _openReport(ReportModel report) async {
+    if (_pendingReportActions.containsKey(report.id)) return;
+
+    setState(() {
+      _pendingReportActions[report.id] = _ReportAccessAction.open;
+    });
+
+    final reportUrl = await _resolveReportUrl(report);
+
+    if (!mounted) return;
+
+    setState(() {
+      _pendingReportActions.remove(report.id);
+    });
+
+    context.push('/reports/pdf', extra: reportUrl);
+  }
+
+  Future<void> _downloadReport(ReportModel report) async {
+    if (_pendingReportActions.containsKey(report.id)) return;
+
+    setState(() {
+      _pendingReportActions[report.id] = _ReportAccessAction.download;
+    });
+
+    final reportUrl = await _resolveReportUrl(report);
+    var launched = false;
+
+    try {
+      launched = await launchUrl(
+        Uri.parse(reportUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      launched = false;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _pendingReportActions.remove(report.id);
+    });
+
+    if (!launched) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Unable to download report')),
+        );
+    }
+  }
+
+  Future<String> _resolveReportUrl(ReportModel report) async {
+    final now = DateTime.now();
+    final cachedUrl = _signedUrlCache[report.id];
+
+    if (cachedUrl != null && now.isBefore(cachedUrl.expiresAt)) {
+      return cachedUrl.url;
+    }
+
+    _signedUrlCache.remove(report.id);
+
+    try {
+      final signedUrl = await ref
+          .read(reportRepositoryProvider)
+          .fetchSignedReportUrl(report.id)
+          .timeout(_signedUrlRequestTimeout);
+      final signedUri = Uri.tryParse(signedUrl);
+
+      if (signedUri == null ||
+          !signedUri.hasScheme ||
+          !signedUri.hasAuthority) {
+        return report.url;
+      }
+
+      _signedUrlCache[report.id] = _CachedSignedUrl(
+        url: signedUrl,
+        expiresAt: DateTime.now().add(_signedUrlCacheDuration),
+      );
+      return signedUrl;
+    } catch (_) {
+      return report.url;
+    }
+  }
+
   void _runAfterRouteSettles(VoidCallback action) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -312,6 +402,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('Sharing coming soon')));
   }
+}
+
+enum _ReportAccessAction { open, download }
+
+class _CachedSignedUrl {
+  const _CachedSignedUrl({required this.url, required this.expiresAt});
+
+  final String url;
+  final DateTime expiresAt;
 }
 
 class _HeaderCard extends StatelessWidget {

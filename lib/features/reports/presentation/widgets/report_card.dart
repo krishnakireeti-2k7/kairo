@@ -11,6 +11,9 @@ class ReportCard extends StatelessWidget {
   final VoidCallback onToggleStar;
   final VoidCallback onShare;
   final bool isStarBusy;
+  final bool isAccessBusy;
+  final bool isOpenBusy;
+  final bool isDownloadBusy;
 
   const ReportCard({
     super.key,
@@ -22,6 +25,9 @@ class ReportCard extends StatelessWidget {
     required this.onToggleStar,
     required this.onShare,
     this.isStarBusy = false,
+    this.isAccessBusy = false,
+    this.isOpenBusy = false,
+    this.isDownloadBusy = false,
   });
 
   @override
@@ -128,8 +134,13 @@ class ReportCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: onOpen,
-                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    onPressed: isAccessBusy ? null : onOpen,
+                    icon: isOpenBusy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('Open'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFD7E7F7),
@@ -143,8 +154,13 @@ class ReportCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: onDownload,
-                    icon: const Icon(Icons.download_rounded, size: 18),
+                    onPressed: isAccessBusy ? null : onDownload,
+                    icon: isDownloadBusy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_rounded, size: 18),
                     label: const Text('Download'),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF2A75B8),

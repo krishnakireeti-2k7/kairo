@@ -60,6 +60,34 @@ class ReportService {
     return ReportModel.fromJson(decoded);
   }
 
+  Future<String> fetchSignedReportUrl(String reportId) async {
+    final accessToken = _accessToken;
+    final url = Uri.parse('$_baseUrl/reports/$reportId/signed-url');
+    _logRequest(url);
+
+    final response = await http.get(
+      url,
+      headers: <String, String>{
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch signed report URL: ${response.body}');
+    }
+
+    final decoded = _decodeJsonObject(response.body);
+    final signedUrl = decoded['url'] as String?;
+    if (signedUrl == null || signedUrl.isEmpty) {
+      throw const FormatException(
+        'Signed report URL response did not include a URL.',
+      );
+    }
+
+    return signedUrl;
+  }
+
   Future<ReportModel> renameReport({
     required String reportId,
     required String name,

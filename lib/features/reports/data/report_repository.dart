@@ -14,6 +14,10 @@ class ReportRepository {
     return _service.generateReport();
   }
 
+  Future<String> fetchSignedReportUrl(String reportId) {
+    return _service.fetchSignedReportUrl(reportId);
+  }
+
   Future<ReportModel> renameReport({
     required String reportId,
     required String name,
