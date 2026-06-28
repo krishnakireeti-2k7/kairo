@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:kairo/features/reports/data/services/report_file_service.dart';
+import 'package:kairo/features/reports/presentation/providers/report_provider.dart';
 import 'package:pdfx/pdfx.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-class PdfViewerScreen extends StatefulWidget {
+class PdfViewerScreen extends ConsumerStatefulWidget {
   final String url;
-  const PdfViewerScreen({super.key, required this.url});
+  final String fileName;
+
+  const PdfViewerScreen({
+    super.key,
+    required this.url,
+    this.fileName = 'Kairo Report.pdf',
+  });
 
   @override
-  State<PdfViewerScreen> createState() => _PdfViewerScreenState();
+  ConsumerState<PdfViewerScreen> createState() => _PdfViewerScreenState();
 }
 
-class _PdfViewerScreenState extends State<PdfViewerScreen> {
+class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
   PdfControllerPinch? _pdfController;
   bool _isLoading = true;
+  bool _isDownloading = false;
   bool _hasError = false;
   String? _errorMessage;
 
@@ -77,11 +86,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           ),
           actions: [
             IconButton(
-              onPressed: () => launchUrl(
-                Uri.parse(widget.url),
-                mode: LaunchMode.externalApplication,
-              ),
-              icon: const Icon(Icons.download_rounded),
+              onPressed: _isDownloading ? null : _downloadReport,
+              icon: _isDownloading
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded),
             ),
           ],
         ),
@@ -108,10 +119,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (_hasError || _pdfController == null) {
       return _ErrorView(
         message: _errorMessage ?? 'There was an error opening this document.',
-        onOpenExternal: () => launchUrl(
-          Uri.parse(widget.url),
-          mode: LaunchMode.externalApplication,
-        ),
+        onRetry: _retryLoadPdf,
       );
     }
 
@@ -143,14 +151,55 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       ),
     );
   }
+
+  Future<void> _downloadReport() async {
+    if (_isDownloading) return;
+
+    setState(() {
+      _isDownloading = true;
+    });
+
+    var message = 'Failed to download report';
+
+    try {
+      final saveLocation = await ref
+          .read(reportDownloadServiceProvider)
+          .download(url: widget.url, fileName: widget.fileName);
+      message = saveLocation == ReportSaveLocation.downloads
+          ? 'Report saved to Downloads'
+          : 'Report saved successfully';
+    } catch (exception, stackTrace) {
+      debugPrint(exception.toString());
+      debugPrint(stackTrace.toString());
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDownloading = false;
+    });
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _retryLoadPdf() {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = null;
+    });
+    _loadPdf();
+  }
 }
 
 // _ErrorView stays exactly the same as before
 class _ErrorView extends StatelessWidget {
   final String message;
-  final VoidCallback onOpenExternal;
+  final VoidCallback onRetry;
 
-  const _ErrorView({required this.message, required this.onOpenExternal});
+  const _ErrorView({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -192,9 +241,9 @@ class _ErrorView extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: onOpenExternal,
-            icon: const Icon(Icons.open_in_new_rounded),
-            label: const Text('Open in Browser'),
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF2469AE),
               foregroundColor: const Color(0xFFE8F2FF),

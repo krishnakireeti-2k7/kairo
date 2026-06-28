@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kairo/features/reports/data/report_repository.dart';
+import 'package:kairo/features/reports/data/services/report_file_service.dart';
 import 'package:kairo/features/reports/data/services/report_service.dart';
 import 'package:kairo/features/reports/domain/models/report_model.dart';
 
@@ -9,6 +10,17 @@ final reportServiceProvider = Provider<ReportService>((ref) {
 
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   return ReportRepository(ref.watch(reportServiceProvider));
+});
+
+final reportFileServiceProvider = Provider<ReportFileService>((ref) {
+  return ReportFileService();
+});
+
+final reportDownloadServiceProvider = Provider<ReportDownloadService>((ref) {
+  return ReportDownloadService(
+    ref.watch(reportRepositoryProvider),
+    ref.watch(reportFileServiceProvider),
+  );
 });
 
 final reportsProvider = NotifierProvider<ReportsNotifier, ReportsState>(

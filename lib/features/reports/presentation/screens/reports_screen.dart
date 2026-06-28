@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kairo/features/reports/data/services/report_file_service.dart';
 import 'package:kairo/features/reports/domain/models/report_model.dart';
 import 'package:kairo/features/reports/presentation/providers/report_provider.dart';
 import 'package:kairo/features/reports/presentation/widgets/report_card.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -326,16 +326,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       _pendingReportActions[report.id] = _ReportAccessAction.download;
     });
 
-    final reportUrl = await _resolveReportUrl(report);
-    var launched = false;
+    var message = 'Failed to download report';
 
     try {
-      launched = await launchUrl(
-        Uri.parse(reportUrl),
-        mode: LaunchMode.externalApplication,
-      );
-    } catch (_) {
-      launched = false;
+      final reportUrl = await _resolveReportUrl(report);
+      debugPrint('Signed report URL obtained: $reportUrl');
+      final saveLocation = await ref
+          .read(reportDownloadServiceProvider)
+          .download(url: reportUrl, fileName: _reportFileName(report));
+
+      message = saveLocation == ReportSaveLocation.downloads
+          ? 'Report saved to Downloads'
+          : 'Report saved successfully';
+    } catch (exception, stackTrace) {
+      debugPrint(exception.toString());
+      debugPrint(stackTrace.toString());
+      message = 'Failed to download report';
     }
 
     if (!mounted) return;
@@ -344,13 +350,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       _pendingReportActions.remove(report.id);
     });
 
-    if (!launched) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Unable to download report')),
-        );
-    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _reportFileName(ReportModel report) {
+    final sanitizedName = report.name.trim().replaceAll(
+      RegExp(r'[<>:"/\\|?*\x00-\x1F]'),
+      '_',
+    );
+    final baseName = sanitizedName.toLowerCase().endsWith('.pdf')
+        ? sanitizedName.substring(0, sanitizedName.length - 4)
+        : sanitizedName;
+    final safeName = baseName.isEmpty ? 'Kairo Report' : baseName;
+    final truncatedName = safeName.length > 100
+        ? safeName.substring(0, 100)
+        : safeName;
+
+    return '$truncatedName.pdf';
   }
 
   Future<String> _resolveReportUrl(ReportModel report) async {
@@ -358,6 +376,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final cachedUrl = _signedUrlCache[report.id];
 
     if (cachedUrl != null && now.isBefore(cachedUrl.expiresAt)) {
+      debugPrint('Signed report URL obtained from cache: ${cachedUrl.url}');
       return cachedUrl.url;
     }
 
@@ -380,8 +399,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         url: signedUrl,
         expiresAt: DateTime.now().add(_signedUrlCacheDuration),
       );
+      debugPrint('Signed report URL obtained from backend: $signedUrl');
       return signedUrl;
-    } catch (_) {
+    } catch (exception, stackTrace) {
+      debugPrint(exception.toString());
+      debugPrint(stackTrace.toString());
+      debugPrint('Falling back to stored report URL: ${report.url}');
       return report.url;
     }
   }

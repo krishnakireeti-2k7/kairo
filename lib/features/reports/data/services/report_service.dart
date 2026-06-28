@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:kairo/core/config/api_config.dart';
 import 'package:kairo/features/reports/domain/models/report_model.dart';
@@ -86,6 +88,37 @@ class ReportService {
     }
 
     return signedUrl;
+  }
+
+  Future<Uint8List> downloadReport(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      debugPrint('Report download HTTP status: ${response.statusCode}');
+
+      final bytes = response.bodyBytes;
+      debugPrint('Report download bytes: ${bytes.length}');
+
+      final hasValidPdfSignature = _isPdf(bytes);
+      debugPrint('Report PDF signature valid: $hasValidPdfSignature');
+
+      if (response.statusCode != 200 || !hasValidPdfSignature) {
+        throw Exception('Failed to download report');
+      }
+
+      return bytes;
+    } catch (exception, stackTrace) {
+      debugPrint(exception.toString());
+      debugPrint(stackTrace.toString());
+      rethrow;
+    }
+  }
+
+  bool _isPdf(Uint8List bytes) {
+    return bytes.length >= 4 &&
+        bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46;
   }
 
   Future<ReportModel> renameReport({

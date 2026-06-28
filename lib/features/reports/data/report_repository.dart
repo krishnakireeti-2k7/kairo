@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:kairo/features/reports/data/services/report_service.dart';
 import 'package:kairo/features/reports/domain/models/report_model.dart';
 
@@ -16,6 +18,10 @@ class ReportRepository {
 
   Future<String> fetchSignedReportUrl(String reportId) {
     return _service.fetchSignedReportUrl(reportId);
+  }
+
+  Future<Uint8List> downloadReport(String url) {
+    return _service.downloadReport(url);
   }
 
   Future<ReportModel> renameReport({
