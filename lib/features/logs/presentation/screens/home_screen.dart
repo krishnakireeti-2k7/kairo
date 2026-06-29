@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:kairo/features/auth/presentation/providers/auth_provider.dart';
 import 'package:kairo/features/logs/domain/models/log_model.dart';
 import 'package:kairo/features/logs/presentation/providers/log_provider.dart';
 
@@ -11,598 +10,512 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logsAsync = ref.watch(logsProvider);
-    final logs = logsAsync.asData?.value ?? const <LogModel>[];
-    final authNotifier = ref.read(authNotifierProvider.notifier);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF09131A),
+      backgroundColor: _HomeColors.background,
       body: SafeArea(
         child: Stack(
           children: [
-            Positioned(
-              top: -120,
-              left: -20,
-              child: _AmbientGlow(
-                size: 250,
-                color: const Color(0xFF79D9E2).withValues(alpha: 0.08),
-              ),
+            const Positioned(
+              top: -130,
+              left: -80,
+              child: _AmbientGlow(size: 280, color: Color(0x1679D9E2)),
             ),
-            Positioned(
-              right: -50,
-              top: 250,
-              child: _AmbientGlow(
-                size: 220,
-                color: const Color(0xFF8FB9F7).withValues(alpha: 0.10),
-              ),
+            const Positioned(
+              top: 300,
+              right: -110,
+              child: _AmbientGlow(size: 260, color: Color(0x148FB9F7)),
             ),
             RefreshIndicator(
-              color: const Color(0xFF79D9E2),
-              backgroundColor: const Color(0xFF162129),
-              onRefresh: () async {
-                ref.invalidate(logsProvider);
-                await ref.read(logsProvider.future);
-              },
+              color: _HomeColors.teal,
+              backgroundColor: _HomeColors.panel,
+              onRefresh: () => _refresh(ref),
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // ── Header ──────────────────────────────────────────
-                        Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF18B6B),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  '🧑🏻‍⚕️',
-                                  style: TextStyle(fontSize: 20),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'Kairo',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFF7FAFF),
-                              ),
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              onPressed: () async => authNotifier.signOut(),
-                              icon: const Icon(
-                                Icons.logout_rounded,
-                                color: Color(0xFFD7E3F3),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-
-                        // ── Greeting + Headline ──────────────────────────────
-                        Text(
-                          _greetingLabel(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1.8,
-                            color: Color(0xFF84E3E6),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _headline(logs),
-                          style: const TextStyle(
-                            fontSize: 58,
-                            height: 0.9,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFC9DEFF),
-                            letterSpacing: -2.2,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _summary(logs),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                            color: Color(0xFFCBD2DD),
-                          ),
-                        ),
+                        const _HomeHeader(),
                         const SizedBox(height: 28),
-
-                        // ── This Week card ───────────────────────────────────
-                        _ThisWeekCard(logs: logs),
-                        const SizedBox(height: 16),
-
-                        // ── Top Symptom + Pattern ────────────────────────────
-                        _TopSymptomCard(logs: logs),
-                        const SizedBox(height: 16),
-
-                        // ── Bring This Up card ───────────────────────────────
-                        _BringThisUpCard(logs: logs),
-                        const SizedBox(height: 28),
-
-                        // ── Recent Logs ──────────────────────────────────────
-                        const Text(
-                          'Recent Logs',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFF5F7FA),
+                        logsAsync.when(
+                          loading: () => const _HomeSkeleton(),
+                          error: (_, _) => _HomeErrorState(
+                            onRetry: () => ref.invalidate(logsProvider),
                           ),
+                          data: (logs) {
+                            if (logs.isEmpty) {
+                              return _EmptyHomeState(
+                                onLog: () => context.push('/log'),
+                              );
+                            }
+
+                            final snapshot = _HomeSnapshot.fromLogs(logs);
+                            return _HomeContent(snapshot: snapshot);
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        _LogsSection(logsAsync: logsAsync),
                       ]),
                     ),
                   ),
                 ],
               ),
             ),
-
-            Positioned(
-              right: 16,
-              bottom: 24,
-              child: FloatingActionButton(
-                onPressed: () => context.push('/log'),
-                backgroundColor: const Color(0xFF8ED7F7),
-                child: const Icon(Icons.add_rounded, color: Color(0xFF07243B)),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
-}
 
-// ── This Week Card ────────────────────────────────────────────────────────────
-
-class _ThisWeekCard extends StatelessWidget {
-  final List<LogModel> logs;
-
-  const _ThisWeekCard({required this.logs});
-
-  @override
-  Widget build(BuildContext context) {
-    final threshold = DateTime.now().subtract(const Duration(days: 7));
-    final weekLogs = logs.where((l) => l.timestamp.isAfter(threshold)).toList();
-    final totalLogs = weekLogs.length;
-    final avgSeverity = totalLogs == 0
-        ? null
-        : weekLogs.map((l) => l.severity).reduce((a, b) => a + b) / totalLogs;
-    final avgDuration = totalLogs == 0
-        ? null
-        : weekLogs.map((l) => l.duration).reduce((a, b) => a + b) / totalLogs;
-
-    // Find most common day
-    String? peakDay;
-    if (weekLogs.isNotEmpty) {
-      final dayCounts = <int, int>{};
-      for (final log in weekLogs) {
-        dayCounts[log.timestamp.weekday] =
-            (dayCounts[log.timestamp.weekday] ?? 0) + 1;
-      }
-      final maxEntry = dayCounts.entries.reduce(
-        (a, b) => a.value >= b.value ? a : b,
-      );
-      peakDay = _weekdayName(maxEntry.key);
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF84E3E6).withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.calendar_today_rounded,
-                  size: 14,
-                  color: Color(0xFF84E3E6),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'THIS WEEK',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1.6,
-                  color: Color(0xFF84E3E6),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (totalLogs == 0)
-            const Text(
-              'No entries in the last 7 days.',
-              style: TextStyle(
-                fontSize: 15,
-                color: Color(0xFFA4AFBD),
-                height: 1.5,
-              ),
-            )
-          else ...[
-            _WeekStatRow(
-              label: 'Episodes logged',
-              value: '$totalLogs',
-              accent: const Color(0xFFC9DEFF),
-            ),
-            const SizedBox(height: 12),
-            _WeekStatRow(
-              label: 'Average severity',
-              value: '${avgSeverity!.toStringAsFixed(1)} / 10',
-              accent: _severityColor(avgSeverity.round()),
-            ),
-            if (avgDuration != null) ...[
-              const SizedBox(height: 12),
-              _WeekStatRow(
-                label: 'Average duration',
-                value: '${avgDuration.round()} mins',
-                accent: const Color(0xFFD7B7FF),
-              ),
-            ],
-            if (peakDay != null) ...[
-              const SizedBox(height: 12),
-              _WeekStatRow(
-                label: 'Most episodes on',
-                value: peakDay,
-                accent: const Color(0xFFFFA8A4),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
+  Future<void> _refresh(WidgetRef ref) async {
+    ref.invalidate(logsProvider);
+    await ref.read(logsProvider.future);
   }
 }
 
-class _WeekStatRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color accent;
+class _HomeContent extends StatelessWidget {
+  const _HomeContent({required this.snapshot});
 
-  const _WeekStatRow({
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, color: Color(0xFFA4AFBD)),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: accent,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Top Symptom Card ──────────────────────────────────────────────────────────
-
-class _TopSymptomCard extends StatelessWidget {
-  final List<LogModel> logs;
-
-  const _TopSymptomCard({required this.logs});
-
-  @override
-  Widget build(BuildContext context) {
-    if (logs.isEmpty) return const SizedBox.shrink();
-
-    // Count symptom frequencies
-    final freq = <String, int>{};
-    for (final log in logs) {
-      for (final s in log.symptoms) {
-        freq[s] = (freq[s] ?? 0) + 1;
-      }
-    }
-    if (freq.isEmpty) return const SizedBox.shrink();
-
-    final sorted = freq.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final top = sorted.first;
-    final topName = top.key.isEmpty
-        ? top.key
-        : top.key[0].toUpperCase() + top.key.substring(1);
-    final count = top.value;
-
-    // Average severity for that symptom
-    final relevantLogs = logs
-        .where((l) => l.symptoms.contains(top.key))
-        .toList();
-    final avgSev = relevantLogs.isEmpty
-        ? 0.0
-        : relevantLogs.map((l) => l.severity).reduce((a, b) => a + b) /
-              relevantLogs.length;
-
-    // Average duration for that symptom
-    final avgDur = relevantLogs.isEmpty
-        ? 0.0
-        : relevantLogs.map((l) => l.duration).reduce((a, b) => a + b) /
-              relevantLogs.length;
-
-    // Time of day pattern
-    final timePattern = _timeOfDayPattern(relevantLogs);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD7B7FF).withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.insights_rounded,
-                  size: 14,
-                  color: Color(0xFFD7B7FF),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'TOP SYMPTOM',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1.6,
-                  color: Color(0xFFD7B7FF),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                topName,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFF5F7FA),
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Text(
-                  '$count ${count == 1 ? 'episode' : 'episodes'} total',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFFA4AFBD),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // Mini stat row
-          Row(
-            children: [
-              _MiniStat(
-                label: 'Avg severity',
-                value: avgSev.toStringAsFixed(1),
-                color: _severityColor(avgSev.round()),
-              ),
-              const SizedBox(width: 16),
-              _MiniStat(
-                label: 'Avg duration',
-                value: '${avgDur.round()} min',
-                color: const Color(0xFFD7B7FF),
-              ),
-              if (timePattern != null) ...[
-                const SizedBox(width: 16),
-                _MiniStat(
-                  label: 'Often in',
-                  value: timePattern,
-                  color: const Color(0xFF84E3E6),
-                ),
-              ],
-            ],
-          ),
-          if (sorted.length > 1) ...[
-            const SizedBox(height: 16),
-            const Divider(color: Color(0xFF1E2D38), height: 1),
-            const SizedBox(height: 14),
-            const Text(
-              'Other symptoms',
-              style: TextStyle(fontSize: 12, color: Color(0xFF7A8A99)),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: sorted.skip(1).take(4).map((e) {
-                final name = e.key.isEmpty
-                    ? e.key
-                    : e.key[0].toUpperCase() + e.key.substring(1);
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF134D87).withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFF2E78C6).withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Text(
-                    '$name · ${e.value}x',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFFAED0FF),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _MiniStat({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  final _HomeSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
+        _LatestOverview(snapshot: snapshot),
+        const SizedBox(height: 16),
+        _PrimaryActions(
+          onLog: () => context.push('/log'),
+          onAskAi: () => context.push('/chat'),
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF7A8A99)),
+        const SizedBox(height: 32),
+        _InsightPanel(insight: snapshot.insight),
+        const SizedBox(height: 20),
+        _WeekPanel(snapshot: snapshot),
+        const SizedBox(height: 32),
+        _RecentActivity(
+          logs: snapshot.recentLogs,
+          onOpenTimeline: () => context.push('/timeline'),
         ),
       ],
     );
   }
 }
 
-// ── Bring This Up Card ────────────────────────────────────────────────────────
-
-class _BringThisUpCard extends StatelessWidget {
-  final List<LogModel> logs;
-
-  const _BringThisUpCard({required this.logs});
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader();
 
   @override
   Widget build(BuildContext context) {
-    final prompts = _generatePrompts(logs);
-    if (prompts.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _HomeColors.teal.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+              ),
+              child: const Icon(
+                Icons.monitor_heart_outlined,
+                color: _HomeColors.teal,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Kairo',
+              style: TextStyle(
+                color: _HomeColors.textStrong,
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Semantics(
+          header: true,
+          child: Text(
+            _greeting(),
+            style: const TextStyle(
+              color: _HomeColors.textStrong,
+              fontSize: 30,
+              height: 1.15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Here is what you have recorded and what you can do next.',
+          style: TextStyle(
+            color: _HomeColors.textMuted,
+            fontSize: 15,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
+class _LatestOverview extends StatelessWidget {
+  const _LatestOverview({required this.snapshot});
+
+  final _HomeSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = snapshot.latestLog;
+    final symptom = _primarySymptom(latest);
+    final semanticLabel = [
+      'Last recorded symptom: $symptom.',
+      _relativeDateTime(latest.timestamp),
+      'Severity ${latest.severity} out of 10.',
+      if (latest.duration > 0) 'Duration ${_formatDuration(latest.duration)}.',
+    ].join(' ');
+
+    return Semantics(
+      container: true,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: _panelDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 18,
+                    color: _HomeColors.teal,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    snapshot.hasLogsThisWeek
+                        ? 'Last recorded this week'
+                        : 'Last recorded',
+                    style: const TextStyle(
+                      color: _HomeColors.teal,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                symptom,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _HomeColors.textStrong,
+                  fontSize: 26,
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _relativeDateTime(latest.timestamp),
+                style: const TextStyle(
+                  color: _HomeColors.textMuted,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _FactPill(
+                    icon: Icons.speed_rounded,
+                    label: 'Severity ${latest.severity} of 10',
+                  ),
+                  if (latest.duration > 0)
+                    _FactPill(
+                      icon: Icons.schedule_rounded,
+                      label: _formatDuration(latest.duration),
+                    ),
+                ],
+              ),
+              if (!snapshot.hasLogsThisWeek) ...[
+                const SizedBox(height: 16),
+                const Divider(color: _HomeColors.divider, height: 1),
+                const SizedBox(height: 14),
+                const Text(
+                  'No episodes have been recorded in the last 7 days.',
+                  style: TextStyle(
+                    color: _HomeColors.textMuted,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FactPill extends StatelessWidget {
+  const _FactPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: _HomeColors.surface,
+        borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+        border: Border.all(color: _HomeColors.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: _HomeColors.blue),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _HomeColors.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryActions extends StatelessWidget {
+  const _PrimaryActions({required this.onLog, required this.onAskAi});
+
+  final VoidCallback onLog;
+  final VoidCallback onAskAi;
+
+  @override
+  Widget build(BuildContext context) {
+    final stackButtons = MediaQuery.textScalerOf(context).scale(15) > 19;
+
+    final logButton = FilledButton.icon(
+      onPressed: onLog,
+      icon: const Icon(Icons.add_rounded),
+      label: const Text('Log New Symptom'),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(54),
+        backgroundColor: _HomeColors.action,
+        foregroundColor: _HomeColors.actionText,
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+        ),
+      ),
+    );
+    final aiButton = OutlinedButton.icon(
+      onPressed: onAskAi,
+      icon: const Icon(Icons.forum_outlined),
+      label: const Text('Ask AI'),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(54),
+        foregroundColor: _HomeColors.textStrong,
+        side: const BorderSide(color: _HomeColors.outline),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+        ),
+      ),
+    );
+
+    if (stackButtons) {
+      return Column(
+        children: [
+          SizedBox(width: double.infinity, child: logButton),
+          const SizedBox(height: 10),
+          SizedBox(width: double.infinity, child: aiButton),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(flex: 3, child: logButton),
+        const SizedBox(width: 10),
+        Expanded(flex: 2, child: aiButton),
+      ],
+    );
+  }
+}
+
+class _InsightPanel extends StatefulWidget {
+  const _InsightPanel({required this.insight});
+
+  final _HomeInsight insight;
+
+  @override
+  State<_InsightPanel> createState() => _InsightPanelState();
+}
+
+class _InsightPanelState extends State<_InsightPanel> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF182129),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFF2469AE).withValues(alpha: 0.35),
-        ),
+      padding: const EdgeInsets.all(20),
+      decoration: _panelDecoration(
+        borderColor: _HomeColors.blue.withValues(alpha: 0.24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2469AE).withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.chat_bubble_outline_rounded,
-                  size: 14,
-                  color: Color(0xFF8FB9F7),
-                ),
+              Icon(
+                Icons.lightbulb_outline_rounded,
+                size: 19,
+                color: _HomeColors.blue,
               ),
-              const SizedBox(width: 10),
-              const Text(
-                'BRING THIS UP',
+              SizedBox(width: 9),
+              Text(
+                "Today's insight",
                 style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1.6,
-                  color: Color(0xFF8FB9F7),
+                  color: _HomeColors.blue,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Mention to your doctor',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFFF5F7FA),
+          const SizedBox(height: 16),
+          Semantics(
+            header: true,
+            child: Text(
+              widget.insight.title,
+              style: const TextStyle(
+                color: _HomeColors.textStrong,
+                fontSize: 20,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.insight.summary,
+            style: const TextStyle(
+              color: _HomeColors.textMuted,
+              fontSize: 14,
+              height: 1.5,
             ),
           ),
           const SizedBox(height: 14),
-          ...prompts.map(
-            (prompt) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 5),
-                    child: CircleAvatar(
-                      radius: 3,
-                      backgroundColor: Color(0xFF8FB9F7),
+          Semantics(
+            button: true,
+            expanded: _expanded,
+            label: _expanded
+                ? 'Hide insight evidence'
+                : 'Show why this insight appears',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => setState(() => _expanded = !_expanded),
+                borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+                child: ExcludeSemantics(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _expanded
+                                ? 'Hide explanation'
+                                : 'Why am I seeing this?',
+                            style: const TextStyle(
+                              color: _HomeColors.text,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: _HomeColors.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      prompt,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: Color(0xFFCBD2DD),
-                      ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Column(
+                      children: widget.insight.evidence
+                          .map((item) => _EvidenceRow(text: item))
+                          .toList(growable: false),
                     ),
-                  ),
-                ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EvidenceRow extends StatelessWidget {
+  const _EvidenceRow({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Icon(
+              Icons.check_circle_outline_rounded,
+              size: 17,
+              color: _HomeColors.teal,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: _HomeColors.text,
+                fontSize: 14,
+                height: 1.45,
               ),
             ),
           ),
@@ -612,235 +525,257 @@ class _BringThisUpCard extends StatelessWidget {
   }
 }
 
-// ── Logs Section ──────────────────────────────────────────────────────────────
+class _WeekPanel extends StatelessWidget {
+  const _WeekPanel({required this.snapshot});
 
-class _LogsSection extends StatelessWidget {
-  final AsyncValue<List<LogModel>> logsAsync;
-
-  const _LogsSection({required this.logsAsync});
+  final _HomeSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
-    return logsAsync.when(
-      loading: () => Container(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        decoration: _panelDecoration(),
-        child: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF79D9E2)),
-          ),
-        ),
+    final stats = [
+      _WeekStatData(
+        label: 'Episodes',
+        value: '${snapshot.weekLogs.length}',
+        semanticValue: '${snapshot.weekLogs.length} episodes',
       ),
-      error: (error, _) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: _panelDecoration(),
-        child: Text(
-          'Error: $error',
-          style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 15),
-        ),
+      _WeekStatData(
+        label: 'Avg severity',
+        value: snapshot.averageSeverity == null
+            ? '--'
+            : snapshot.averageSeverity!.toStringAsFixed(1),
+        semanticValue: snapshot.averageSeverity == null
+            ? 'No average severity'
+            : 'Average severity ${snapshot.averageSeverity!.toStringAsFixed(1)} out of 10',
       ),
-      data: (logs) {
-        if (logs.isEmpty) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: _panelDecoration(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'No logs yet',
-                  style: TextStyle(
-                    color: Color(0xFFE5EBF4),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Tap the + button below to record your first symptom entry.',
-                  style: TextStyle(
-                    color: Color(0xFFA4AFBD),
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-              ],
+      _WeekStatData(
+        label: 'Avg duration',
+        value: snapshot.averageDuration == null
+            ? '--'
+            : _formatDuration(snapshot.averageDuration!.round()),
+        semanticValue: snapshot.averageDuration == null
+            ? 'No average duration'
+            : 'Average duration ${_formatDuration(snapshot.averageDuration!.round())}',
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This week',
+            style: TextStyle(
+              color: _HomeColors.textStrong,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
             ),
-          );
-        }
-
-        final previewLogs = logs.take(3).toList();
-
-        return Container(
-          decoration: _panelDecoration(),
-          child: Column(
-            children: [
-              ListView.builder(
-                itemCount: previewLogs.length,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  logs.length > 3 ? 10 : 16,
-                ),
-                itemBuilder: (context, index) {
-                  final log = previewLogs[index];
-
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: index == previewLogs.length - 1 ? 0 : 16,
-                    ),
-                    child: _LogListItem(log: log),
-                  );
-                },
-              ),
-              if (logs.length > 3) ...[
-                const SizedBox(height: 2),
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.push('/timeline'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF84E3E6),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'Show more',
-                      style: TextStyle(
-                        color: Color(0xFF84E3E6),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ],
           ),
-        );
-      },
+          const SizedBox(height: 6),
+          const Text(
+            'Based on entries from the last 7 days.',
+            style: TextStyle(color: _HomeColors.textMuted, fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final useRows =
+                  constraints.maxWidth < 300 ||
+                  MediaQuery.textScalerOf(context).scale(14) > 18;
+              if (useRows) {
+                return Column(
+                  children: stats
+                      .map((stat) => _WeekStatRow(data: stat))
+                      .toList(growable: false),
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: stats
+                    .asMap()
+                    .entries
+                    .map((entry) {
+                      return Expanded(
+                        child: Container(
+                          padding: EdgeInsets.only(
+                            left: entry.key == 0 ? 0 : 14,
+                            right: entry.key == stats.length - 1 ? 0 : 14,
+                          ),
+                          decoration: entry.key == stats.length - 1
+                              ? null
+                              : const BoxDecoration(
+                                  border: Border(
+                                    right: BorderSide(
+                                      color: _HomeColors.divider,
+                                    ),
+                                  ),
+                                ),
+                          child: _WeekStat(data: entry.value),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _LogListItem extends StatelessWidget {
-  final LogModel log;
+class _WeekStatData {
+  const _WeekStatData({
+    required this.label,
+    required this.value,
+    required this.semanticValue,
+  });
 
-  const _LogListItem({required this.log});
+  final String label;
+  final String value;
+  final String semanticValue;
+}
+
+class _WeekStat extends StatelessWidget {
+  const _WeekStat({required this.data});
+
+  final _WeekStatData data;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: _severityColor(log.severity).withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Center(
-            child: Text(
-              '${log.severity}',
-              style: TextStyle(
-                fontSize: 24,
+    return Semantics(
+      label: '${data.label}: ${data.semanticValue}',
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              data.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _HomeColors.textStrong,
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: _severityColor(log.severity),
               ),
             ),
+            const SizedBox(height: 5),
+            Text(
+              data.label,
+              style: const TextStyle(
+                color: _HomeColors.textMuted,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekStatRow extends StatelessWidget {
+  const _WeekStatRow({required this.data});
+
+  final _WeekStatData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '${data.label}: ${data.semanticValue}',
+      child: ExcludeSemantics(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _HomeColors.divider)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  data.label,
+                  style: const TextStyle(
+                    color: _HomeColors.textMuted,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(
+                data.value,
+                style: const TextStyle(
+                  color: _HomeColors.textStrong,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 14),
-        Expanded(
+      ),
+    );
+  }
+}
+
+class _RecentActivity extends StatelessWidget {
+  const _RecentActivity({required this.logs, required this.onOpenTimeline});
+
+  final List<LogModel> logs;
+  final VoidCallback onOpenTimeline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Recent activity',
+          style: TextStyle(
+            color: _HomeColors.textStrong,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'A quick reminder of your latest entries.',
+          style: TextStyle(color: _HomeColors.textMuted, fontSize: 13),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          decoration: _panelDecoration(),
+          clipBehavior: Clip.antiAlias,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: log.symptoms.isEmpty
-                        ? const Text(
-                            'No symptoms',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFF5F7FA),
-                            ),
-                          )
-                        : Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: log.symptoms.map((s) {
-                              final display = s.isEmpty
-                                  ? s
-                                  : s[0].toUpperCase() + s.substring(1);
-                              return Chip(
-                                label: Text(
-                                  display,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFFAED0FF),
-                                  ),
-                                ),
-                                backgroundColor: const Color(0xFF134D87),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  side: const BorderSide(
-                                    color: Color(0xFF2E78C6),
-                                  ),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 0,
-                                ),
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              );
-                            }).toList(),
-                          ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _formatDateTime(log.timestamp),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFFA7B0BD),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Severity ${log.severity} · ${log.duration} mins',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF87E6EF),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (log.notes.trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  log.notes,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                    color: Color(0xFFD5DCE6),
-                  ),
-                ),
-              ],
-            ],
+            children: logs
+                .asMap()
+                .entries
+                .map((entry) {
+                  return _RecentActivityRow(
+                    log: entry.value,
+                    showDivider: entry.key != logs.length - 1,
+                    onTap: onOpenTimeline,
+                  );
+                })
+                .toList(growable: false),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onOpenTimeline,
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: const Text('View full history'),
+            style: TextButton.styleFrom(
+              foregroundColor: _HomeColors.teal,
+              minimumSize: const Size(48, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ],
@@ -848,186 +783,590 @@ class _LogListItem extends StatelessWidget {
   }
 }
 
-class _AmbientGlow extends StatelessWidget {
-  final double size;
-  final Color color;
+class _RecentActivityRow extends StatelessWidget {
+  const _RecentActivityRow({
+    required this.log,
+    required this.showDivider,
+    required this.onTap,
+  });
 
-  const _AmbientGlow({required this.size, required this.color});
+  final LogModel log;
+  final bool showDivider;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [color, Colors.transparent]),
+    final symptom = _primarySymptom(log);
+    return Semantics(
+      button: true,
+      label:
+          '$symptom, ${_relativeDateTime(log.timestamp)}, severity ${log.severity} out of 10. Open full history.',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: ExcludeSemantics(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 76),
+              margin: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: showDivider
+                  ? const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: _HomeColors.divider),
+                      ),
+                    )
+                  : null,
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _HomeColors.blue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(
+                        _HomeDimensions.radius,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.notes_rounded,
+                      color: _HomeColors.blue,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          symptom,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _HomeColors.textStrong,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          _relativeDateTime(log.timestamp),
+                          style: const TextStyle(
+                            color: _HomeColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Severity ${log.severity}',
+                    style: const TextStyle(
+                      color: _HomeColors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _HomeColors.textMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+class _EmptyHomeState extends StatelessWidget {
+  const _EmptyHomeState({required this.onLog});
 
-BoxDecoration _panelDecoration() {
-  return BoxDecoration(
-    color: const Color(0xFF182129),
-    borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: const Color(0xFFDBE3ED).withValues(alpha: 0.05)),
-  );
-}
+  final VoidCallback onLog;
 
-String _greetingLabel() {
-  final hour = DateTime.now().hour;
-  if (hour < 12) return 'MORNING OVERVIEW';
-  if (hour < 17) return 'AFTERNOON OVERVIEW';
-  return 'EVENING OVERVIEW';
-}
-
-String _headline(List<LogModel> logs) {
-  if (logs.isEmpty) return 'Ready\nTo Log';
-  final avg = logs.map((l) => l.severity).reduce((a, b) => a + b) / logs.length;
-  if (avg <= 3) return 'Stable\n& Calm';
-  if (avg <= 6) return 'Watchful\n& Aware';
-  return 'Take It\nEasy';
-}
-
-String _summary(List<LogModel> logs) {
-  if (logs.isEmpty) {
-    return 'Start tracking symptoms to build a clearer picture of patterns, triggers, and recovery trends.';
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: _HomeColors.teal.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+            ),
+            child: const Icon(
+              Icons.edit_note_rounded,
+              color: _HomeColors.teal,
+              size: 27,
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Start building your symptom history',
+            style: TextStyle(
+              color: _HomeColors.textStrong,
+              fontSize: 22,
+              height: 1.25,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Consistent entries can help you notice patterns and prepare clearer information for future appointments.',
+            style: TextStyle(
+              color: _HomeColors.textMuted,
+              fontSize: 14,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onLog,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Log First Symptom'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+                backgroundColor: _HomeColors.action,
+                foregroundColor: _HomeColors.actionText,
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
-  final latest = logs.first;
-  return 'Your recent entries suggest ${_severityLabel(latest.severity).toLowerCase()} symptoms. Keep logging to strengthen trend visibility for care decisions.';
 }
 
-List<String> _generatePrompts(List<LogModel> logs) {
-  if (logs.isEmpty) return [];
-  final prompts = <String>[];
+class _HomeErrorState extends StatelessWidget {
+  const _HomeErrorState({required this.onRetry});
 
-  // Frequency prompt
-  final freq = <String, int>{};
-  for (final log in logs) {
-    for (final s in log.symptoms) {
-      freq[s] = (freq[s] ?? 0) + 1;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            color: _HomeColors.textMuted,
+            size: 30,
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            "We couldn't load your health history",
+            style: TextStyle(
+              color: _HomeColors.textStrong,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Check your connection and try again. Your saved entries have not been changed.',
+            style: TextStyle(
+              color: _HomeColors.textMuted,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try Again'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(140, 50),
+              foregroundColor: _HomeColors.textStrong,
+              side: const BorderSide(color: _HomeColors.outline),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeSkeleton extends StatefulWidget {
+  const _HomeSkeleton();
+
+  @override
+  State<_HomeSkeleton> createState() => _HomeSkeletonState();
+}
+
+class _HomeSkeletonState extends State<_HomeSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
     }
   }
-  if (freq.isNotEmpty) {
-    final top = freq.entries.reduce((a, b) => a.value >= b.value ? a : b);
-    final name = top.key.isEmpty
-        ? top.key
-        : top.key[0].toUpperCase() + top.key.substring(1);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Opacity(
+          opacity: 0.55 + (_controller.value * 0.25),
+          child: child,
+        );
+      },
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SkeletonBlock(height: 190),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _SkeletonBlock(height: 54)),
+              SizedBox(width: 10),
+              Expanded(child: _SkeletonBlock(height: 54)),
+            ],
+          ),
+          SizedBox(height: 32),
+          _SkeletonBlock(height: 180),
+          SizedBox(height: 20),
+          _SkeletonBlock(height: 150),
+          SizedBox(height: 32),
+          _SkeletonLine(width: 140, height: 20),
+          SizedBox(height: 14),
+          _SkeletonBlock(height: 150),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonBlock extends StatelessWidget {
+  const _SkeletonBlock({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: height,
+      decoration: BoxDecoration(
+        color: _HomeColors.panel,
+        borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+      ),
+    );
+  }
+}
+
+class _SkeletonLine extends StatelessWidget {
+  const _SkeletonLine({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _HomeColors.panel,
+        borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+      ),
+    );
+  }
+}
+
+class _AmbientGlow extends StatelessWidget {
+  const _AmbientGlow({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(colors: [color, Colors.transparent]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeSnapshot {
+  const _HomeSnapshot({
+    required this.latestLog,
+    required this.weekLogs,
+    required this.recentLogs,
+    required this.averageSeverity,
+    required this.averageDuration,
+    required this.insight,
+  });
+
+  final LogModel latestLog;
+  final List<LogModel> weekLogs;
+  final List<LogModel> recentLogs;
+  final double? averageSeverity;
+  final double? averageDuration;
+  final _HomeInsight insight;
+
+  bool get hasLogsThisWeek => weekLogs.isNotEmpty;
+
+  factory _HomeSnapshot.fromLogs(List<LogModel> source) {
+    final logs = [...source]
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final weekLogs = logs
+        .where((log) => !log.timestamp.isBefore(cutoff))
+        .toList(growable: false);
+    final durations = weekLogs
+        .where((log) => log.duration > 0)
+        .map((log) => log.duration)
+        .toList(growable: false);
+    final averageSeverity = weekLogs.isEmpty
+        ? null
+        : weekLogs.fold<int>(0, (sum, log) => sum + log.severity) /
+              weekLogs.length;
+    final averageDuration = durations.isEmpty
+        ? null
+        : durations.reduce((a, b) => a + b) / durations.length;
+
+    return _HomeSnapshot(
+      latestLog: logs.first,
+      weekLogs: weekLogs,
+      recentLogs: logs.take(3).toList(growable: false),
+      averageSeverity: averageSeverity,
+      averageDuration: averageDuration,
+      insight: _buildInsight(weekLogs, logs.first),
+    );
+  }
+}
+
+class _HomeInsight {
+  const _HomeInsight({
+    required this.title,
+    required this.summary,
+    required this.evidence,
+  });
+
+  final String title;
+  final String summary;
+  final List<String> evidence;
+}
+
+_HomeInsight _buildInsight(List<LogModel> weekLogs, LogModel latestLog) {
+  if (weekLogs.isEmpty) {
+    return _HomeInsight(
+      title: 'A new entry will make this overview current',
+      summary:
+          'Kairo does not use older history to infer how you are feeling today.',
+      evidence: [
+        '0 entries were recorded in the last 7 days.',
+        'Your latest entry was ${_relativeDateTime(latestLog.timestamp).toLowerCase()}.',
+      ],
+    );
+  }
+
+  final symptomCounts = <String, int>{};
+  final displayNames = <String, String>{};
+  for (final log in weekLogs) {
+    for (final symptom in log.symptoms) {
+      final normalized = symptom.trim().toLowerCase();
+      if (normalized.isEmpty) continue;
+      symptomCounts[normalized] = (symptomCounts[normalized] ?? 0) + 1;
+      displayNames.putIfAbsent(normalized, () => _titleCase(symptom.trim()));
+    }
+  }
+
+  if (symptomCounts.isNotEmpty) {
+    final top = symptomCounts.entries.reduce((a, b) {
+      if (a.value != b.value) return a.value > b.value ? a : b;
+      return a.key.compareTo(b.key) <= 0 ? a : b;
+    });
+    final relevantLogs = weekLogs
+        .where((log) {
+          return log.symptoms.any(
+            (symptom) => symptom.trim().toLowerCase() == top.key,
+          );
+        })
+        .toList(growable: false);
+    final averageSeverity =
+        relevantLogs.fold<int>(0, (sum, log) => sum + log.severity) /
+        relevantLogs.length;
+
     if (top.value >= 2) {
-      prompts.add(
-        '$name has occurred ${top.value} times across your logs — worth discussing if it feels recurring.',
+      final name = displayNames[top.key] ?? _titleCase(top.key);
+      return _HomeInsight(
+        title: '$name appeared in ${top.value} entries this week',
+        summary:
+            'This is a frequency observation from your entries, not a diagnosis or prediction.',
+        evidence: [
+          '${top.value} of ${weekLogs.length} entries included $name.',
+          'Those entries had an average severity of ${averageSeverity.toStringAsFixed(1)} out of 10.',
+          'Only entries from the last 7 days were considered.',
+        ],
       );
     }
   }
 
-  // Long duration prompt
-  final longDuration = logs
-      .where((l) => l.duration >= 180 && l.symptoms.isNotEmpty)
-      .toList();
-  if (longDuration.length >= 2) {
-    final symptom = longDuration.first.symptoms.first;
-    final name = symptom.isEmpty
-        ? symptom
-        : symptom[0].toUpperCase() + symptom.substring(1);
-    prompts.add(
-      '$name episodes lasting 3+ hours have appeared ${longDuration.length} times — duration patterns can be clinically significant.',
-    );
-  }
-
-  // High severity prompt
-  final highSev = logs.where((l) => l.severity >= 7).toList();
-  if (highSev.length >= 2) {
-    prompts.add(
-      'You\'ve logged ${highSev.length} high-severity episodes (7+). Bring these dates and any notes to your appointment.',
-    );
-  }
-
-  // Recent spike prompt
-  final recent = logs
-      .where(
-        (l) => l.timestamp.isAfter(
-          DateTime.now().subtract(const Duration(days: 7)),
-        ),
-      )
-      .toList();
-  final older = logs
-      .where(
-        (l) =>
-            l.timestamp.isBefore(
-              DateTime.now().subtract(const Duration(days: 7)),
-            ) &&
-            l.timestamp.isAfter(
-              DateTime.now().subtract(const Duration(days: 14)),
-            ),
-      )
-      .toList();
-  if (recent.length > older.length + 1 && older.isNotEmpty) {
-    prompts.add(
-      'Your symptom frequency has increased this week compared to last — a trend worth flagging.',
-    );
-  }
-
-  return prompts.take(3).toList();
+  final averageSeverity =
+      weekLogs.fold<int>(0, (sum, log) => sum + log.severity) / weekLogs.length;
+  return _HomeInsight(
+    title:
+        '${weekLogs.length} ${weekLogs.length == 1 ? 'episode' : 'episodes'} recorded this week',
+    summary:
+        'No symptom repeated enough in this window to highlight a frequency pattern.',
+    evidence: [
+      '${weekLogs.length} ${weekLogs.length == 1 ? 'entry was' : 'entries were'} recorded in the last 7 days.',
+      'Average severity was ${averageSeverity.toStringAsFixed(1)} out of 10.',
+    ],
+  );
 }
 
-String? _timeOfDayPattern(List<LogModel> logs) {
-  if (logs.length < 2) return null;
-  final hours = logs.map((l) => l.timestamp.hour).toList();
-  final avg = hours.reduce((a, b) => a + b) / hours.length;
-  if (avg < 12) return 'mornings';
-  if (avg < 17) return 'afternoons';
-  return 'evenings';
+BoxDecoration _panelDecoration({Color borderColor = _HomeColors.divider}) {
+  return BoxDecoration(
+    color: _HomeColors.panel,
+    borderRadius: BorderRadius.circular(_HomeDimensions.radius),
+    border: Border.all(color: borderColor),
+  );
 }
 
-String _weekdayName(int weekday) {
-  const days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-  return days[weekday - 1];
+String _greeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
-Color _severityColor(int severity) {
-  if (severity <= 3) return const Color(0xFF7FE0E5);
-  if (severity <= 6) return const Color(0xFFAED0FF);
-  return const Color(0xFFFFA8A4);
+String _primarySymptom(LogModel log) {
+  final symptoms = log.symptoms
+      .map((symptom) => symptom.trim())
+      .where((symptom) => symptom.isNotEmpty)
+      .toList(growable: false);
+  if (symptoms.isEmpty) return 'Symptom entry';
+
+  final first = _titleCase(symptoms.first);
+  return symptoms.length == 1 ? first : '$first +${symptoms.length - 1}';
 }
 
-String _severityLabel(int severity) {
-  if (severity <= 3) return 'Mild';
-  if (severity <= 6) return 'Moderate';
-  return 'Severe';
-}
-
-String _formatDateTime(DateTime timestamp) {
+String _relativeDateTime(DateTime value) {
   final now = DateTime.now();
-  final date = DateTime(timestamp.year, timestamp.month, timestamp.day);
   final today = DateTime(now.year, now.month, now.day);
-  final diff = today.difference(date).inDays;
-  if (diff == 0) return 'Today • ${_formatTime(timestamp)}';
-  if (diff == 1) return 'Yesterday • ${_formatTime(timestamp)}';
-  return '${timestamp.day}/${timestamp.month}/${timestamp.year} • ${_formatTime(timestamp)}';
+  final date = DateTime(value.year, value.month, value.day);
+  final difference = today.difference(date).inDays;
+  final time = _formatTime(value);
+
+  if (difference == 0) return 'Today at $time';
+  if (difference == 1) return 'Yesterday at $time';
+
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final year = value.year == now.year ? '' : ' ${value.year}';
+  return '${value.day} ${months[value.month - 1]}$year at $time';
 }
 
-String _formatTime(DateTime t) {
-  final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
-  final minute = t.minute.toString().padLeft(2, '0');
-  return '$hour:$minute ${t.hour >= 12 ? 'PM' : 'AM'}';
+String _formatTime(DateTime value) {
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  final suffix = value.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $suffix';
 }
 
-String _timeAgo(DateTime timestamp) {
-  final diff = DateTime.now().difference(timestamp);
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  return '${diff.inDays}d ago';
+String _formatDuration(int minutes) {
+  if (minutes < 60) return '$minutes min';
+  final hours = minutes ~/ 60;
+  final remainder = minutes % 60;
+  if (remainder == 0) return '${hours}h';
+  return '${hours}h ${remainder}m';
+}
+
+String _titleCase(String value) {
+  if (value.isEmpty) return value;
+  return value[0].toUpperCase() + value.substring(1);
+}
+
+abstract final class _HomeDimensions {
+  static const double radius = 16;
+}
+
+abstract final class _HomeColors {
+  static const Color background = Color(0xFF09131A);
+  static const Color panel = Color(0xFF17222A);
+  static const Color surface = Color(0xFF111B22);
+  static const Color divider = Color(0xFF26343E);
+  static const Color outline = Color(0xFF3B4A55);
+  static const Color textStrong = Color(0xFFF2F6FA);
+  static const Color text = Color(0xFFD4DCE5);
+  static const Color textMuted = Color(0xFF9CA9B6);
+  static const Color teal = Color(0xFF79D9E2);
+  static const Color blue = Color(0xFFA9CFFF);
+  static const Color action = Color(0xFF7FCFEF);
+  static const Color actionText = Color(0xFF082235);
 }
